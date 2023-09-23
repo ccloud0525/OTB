@@ -4,13 +4,11 @@
 
 **我们提供了一个整洁的代码库来端到端的评估时间序列模型在不同评估策略以及评价指标下与baseline算法性能的对比。**
 
-![image-20230923163417956](/Users/xiangfeiqiu/Library/Application Support/typora-user-images/image-20230923163417956.png)
-
 ## Quickstart
 
 ### Installation
 
-Given a python environment (**note**: this project is fully tested under python 3.8), install the dependencies with the following command:
+Given a python environment (**note**: this project ßis fully tested under python 3.8), install the dependencies with the following command:
 
 ```
 pip install -r requirements.txt
