@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from typing import List
 
 from ts_benchmark.data_loader.data_loader import load_data
 from ts_benchmark.evaluation.evaluate_model import eval_model
@@ -8,7 +9,7 @@ from ts_benchmark.report.save_log import save_log
 
 def pipeline(
     data_loader_config: dict, model_config: dict, model_eval_config: dict,
-) -> None:
+) -> List[str]:
     """
      执行benchmark的pipeline流程，包括加载数据、构建模型、评估模型并生成报告。
 
@@ -24,21 +25,20 @@ def pipeline(
     model_factory_list = get_model(model_config)
 
     # 循环遍历每个模型
+    log_file_names = []
     for index, model_factory in enumerate(model_factory_list):
         # 评估模型
-        result_df, model_eval_config_str = eval_model(
+        for i, result_df in enumerate(eval_model(
             model_factory, series_list, model_eval_config
-        )
+        )):
 
-        # 获得测评的模型名称
-        model_name = model_config["models"][index]["model_name"].split(".")[-1]
+            # 获得测评的模型名称
+            model_name = model_config["models"][index]["model_name"].split(".")[-1]
 
-        # 生成报告
-        log_filename = save_log(
-            result_df,
-            model_factory.model_hyper_params,
-            model_eval_config_str,
-            model_name,
-        )
+            # 生成报告
+            log_file_names.append(save_log(
+                result_df,
+                model_name if i == 0 else f"{model_name}_{i}",
+            ))
 
-    return log_filename
+    return log_file_names

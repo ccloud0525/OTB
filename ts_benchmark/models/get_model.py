@@ -86,14 +86,16 @@ class ModelFactory:
     """
 
     def __init__(
-        self, model_factory: Type, model_hyper_params: dict,
+        self, model_name: str, model_factory: Type, model_hyper_params: dict,
     ):
         """
         初始化 ModelFactory 对象。
 
+        :param model_name: 模型名称。
         :param model_factory: 实际模型工厂类，用于创建模型实例。
         :param model_hyper_params: 模型所需的超参数字典，包含标准名称映射。
         """
+        self.model_name = model_name
         self.model_factory = model_factory
         self.model_hyper_params = model_hyper_params
 
@@ -105,6 +107,7 @@ class ModelFactory:
         """
 
         return self.model_factory(**self.model_hyper_params)
+
 
 def get_model(all_model_config: dict) -> list:
     """
@@ -118,6 +121,7 @@ def get_model(all_model_config: dict) -> list:
     # 遍历每个模型配置
     for model_config in all_model_config["models"]:
         model_info = get_model_info(model_config)  # 获取模型信息
+        fallback_model_name = model_config["model_name"].split(".")[-1]
 
         # 解析模型信息
         if isinstance(model_info, dict):
@@ -125,15 +129,17 @@ def get_model(all_model_config: dict) -> list:
             if model_factory is None:
                 raise ValueError("model_factory is none")
             required_hyper_params = model_info.get("required_hyper_params", {})
-
+            model_name = model_info.get("model_name", fallback_model_name)
         elif isinstance(model_info, type):
             model_factory = model_info
             required_hyper_params = {}
             if hasattr(model_factory, "required_hyper_params"):
                 required_hyper_params = model_factory.required_hyper_params()
+            model_name = fallback_model_name
         else:
             model_factory = model_info
             required_hyper_params = {}
+            model_name = fallback_model_name
 
         model_hyper_params = get_model_hyper_params(
             all_model_config["recommend_model_hyper_params"],
@@ -141,5 +147,5 @@ def get_model(all_model_config: dict) -> list:
             model_config,
         )
         # 添加模型工厂到列表
-        model_factory_list.append(ModelFactory(model_factory, model_hyper_params))
+        model_factory_list.append(ModelFactory(model_name, model_factory, model_hyper_params))
     return model_factory_list

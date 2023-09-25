@@ -10,6 +10,7 @@ import time
 from typing import Callable, Tuple, Any, List, NoReturn, Optional, Dict
 
 import ray
+from ray.exceptions import RayActorError
 
 from ts_benchmark.utils.parallel.base import TaskResult
 
@@ -45,7 +46,7 @@ class RayResult(TaskResult):
 
     def result(self) -> Any:
         self._event.wait()
-        if isinstance(self._result, TimeoutError):
+        if isinstance(self._result, Exception):
             raise self._result
         else:
             return self._result
@@ -108,14 +109,22 @@ class RayActorPool:
         for task_obj in tasks:
             task_id = self._ray_task_to_id[task_obj]
             task_info = self._task_info[task_id]
-            task_info.result.put(ray.get(task_obj))
+            try:
+                task_info.result.put(ray.get(task_obj))
+            except RayActorError as e:
+                logger.info("task %d died unexpectedly on actor %d: %s", task_id, task_info.actor_id, e)
+                task_info.result.put(RuntimeError(f"task died unexpectedly: {e}"))
             self._idle_actors.append(task_info.actor_id)
             del self._task_info[task_id]
             del self._ray_task_to_id[task_obj]
 
-    def _get_duration(self, task_info: RayTask) -> float:
+    def _get_duration(self, task_info: RayTask) -> Optional[float]:
         if task_info.start_time is None:
-            task_info.start_time = ray.get(self.actors[task_info.actor_id].start_time.remote())
+            try:
+                task_info.start_time = ray.get(self.actors[task_info.actor_id].start_time.remote())
+            except RayActorError as e:
+                logger.info("actor %d died unexpectedly: %s, restarting...", task_info.actor_id, e)
+                return None
 
         return -1 if task_info.start_time is None else time.time() - task_info.start_time
     
@@ -125,13 +134,14 @@ class RayActorPool:
             task_id = self._ray_task_to_id[task_obj]
             task_info = self._task_info[task_id]
             duration = self._get_duration(task_info)
-            if 0 < task_info.timeout < duration:
-                ray.kill(self.actors[task_info.actor_id], no_restart=False)
+            if duration is None or 0 < task_info.timeout < duration:
+                if duration is not None:
+                    ray.kill(self.actors[task_info.actor_id], no_restart=False)
+                    logger.info("actor %d killed after timeout %f", task_info.actor_id, task_info.timeout)
                 self._restarting_actor_pool[task_info.actor_id] = time.time()
                 task_info.result.put(TimeoutError(f"time limit exceeded: {task_info.timeout}"))
                 del self._task_info[task_id]
                 del self._ray_task_to_id[task_obj]
-                logger.info("actor %d killed after timeout %f", task_info.actor_id, task_info.timeout)
             else:
                 new_active_tasks.append(task_obj)
         self._active_tasks = new_active_tasks
@@ -139,7 +149,7 @@ class RayActorPool:
     def _check_restarting_actors(self):
         new_restarting_pool = {}
         for actor_id, restart_time in self._restarting_actor_pool.items():
-            if time.time() - restart_time > 2:
+            if time.time() - restart_time > 5:
                 self._idle_actors.append(actor_id)
             else:
                 new_restarting_pool[actor_id] = restart_time

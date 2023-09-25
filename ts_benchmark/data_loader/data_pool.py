@@ -82,7 +82,7 @@ class DataPool(metaclass=Singleton):
         data = read_data(datafile_path)
         return data, self._load_meta_info(series_name)
 
-    def get_series(self, series_name: str) -> Tuple:
+    def get_series(self, series_name: str) -> pd.DataFrame:
         """
         根据文件名获取数据池中的数据。
 

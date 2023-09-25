@@ -3,35 +3,38 @@ import base64
 import pickle
 import time
 import traceback
-from typing import List
+from typing import List, Any
 
 import numpy as np
 import pandas as pd
 
 from ts_benchmark.data_loader.data_pool import DataPool
+from ts_benchmark.evaluation.evaluator import Evaluator
 from ts_benchmark.evaluation.metrics import regression_metrics
+from ts_benchmark.evaluation.strategy.constants import FieldNames
 from ts_benchmark.evaluation.strategy.strategy import Strategy
+from ts_benchmark.models.get_model import ModelFactory
 from ts_benchmark.utils.data_processing import split_before
 
 
-class RollingForecst(Strategy):
+class RollingForecast(Strategy):
     REQUIRED_FIELDS = ["pred_len", "train_test_split", "stride", "num_rollings"]
 
     """
     滚动预测策略类，用于在时间序列数据上执行滚动预测。
     """
 
-    def __init__(self, model_eval_config: dict):
+    def __init__(self, strategy_config: dict, evaluator: Evaluator):
         """
         初始化滚动预测策略对象。
 
 
-        :param model_eval_config: 模型评估配置。
+        :param strategy_config: 模型评估配置。
         """
-        super().__init__(model_eval_config)
+        super().__init__(strategy_config, evaluator)
         self.data_lens = None
-        self.pred_len = self.model_eval_config["strategy_args"]["pred_len"]
-        self.num_rollings = self.model_eval_config["strategy_args"]["num_rollings"]
+        self.pred_len = self.strategy_config["pred_len"]
+        self.num_rollings = self.strategy_config["num_rollings"]
 
     def _get_index(self, test_length: int, train_length: int) -> List[int]:
         """
@@ -41,7 +44,7 @@ class RollingForecst(Strategy):
         :param train_length: 训练数据长度。
         :return: 滚动窗口的索引列表。
         """
-        stride = self.model_eval_config["strategy_args"]["stride"]
+        stride = self.strategy_config["stride"]
         index_list = list(
             range(train_length, self.data_lens - self.pred_len + 1, stride)
         ) + (
@@ -51,22 +54,23 @@ class RollingForecst(Strategy):
         )
         return index_list
 
-    def execute(self, series_name: str, model: object, evaluator: object) -> np.ndarray:
+    def execute(self, series_name: str, model_factory: ModelFactory) -> Any:
         """
         执行滚动预测策略。
 
         :param series_name: 要执行预测的序列名称。
-        :param model: 所使用的模型对象。
-        :param evaluator: 评估器对象，用于评估结果。
+        :param model_factory: 模型对象的构造/工厂函数。
         :return: 评估结果的平均值。
         """
+        model = model_factory()
+
         data = DataPool().get_series(series_name)
         self.data_lens = len(data)
         try:
             all_test_results = []
 
             train_length = int(
-                self.model_eval_config["strategy_args"]["train_test_split"]
+                self.strategy_config["train_test_split"]
                 * self.data_lens
             )
             test_length = self.data_lens - train_length
@@ -95,15 +99,15 @@ class RollingForecst(Strategy):
                 total_inference_time += end_inference_time - start_inference_time
                 actual = test.to_numpy()
 
-                single_series_result = evaluator.evaluate(  # 计算评价指标
+                single_series_result = self.evaluator.evaluate(  # 计算评价指标
                     actual, predict, train_data.values
                 )
-                Inference_data = pd.DataFrame(
+                inference_data = pd.DataFrame(
                     predict, columns=test.columns, index=test.index
                 )
 
                 all_rolling_actual.append(test)
-                all_rolling_predict.append(Inference_data)
+                all_rolling_predict.append(inference_data)
                 all_test_results.append(single_series_result)
             average_inference_time = float(total_inference_time) / min(
                 len(index_list), self.num_rollings
@@ -125,15 +129,16 @@ class RollingForecst(Strategy):
             )
 
             single_series_results += [
+                series_name,
                 end_fit_time - start_fit_time,
                 average_inference_time,
                 all_rolling_actual_pickle,
                 all_rolling_predict_pickle,
                 "",
             ]
-        except Exception:
-            log = traceback.format_exc()
-            single_series_results = evaluator.default_result()[:-1] + [log]
+        except Exception as e:
+            log = f"{traceback.format_exc()}\n{e}"
+            single_series_results = self.get_default_result(**{FieldNames.LOG_INFO: log})
 
         return single_series_results
 
@@ -145,3 +150,14 @@ class RollingForecst(Strategy):
         :return: 评价指标列表。
         """
         return regression_metrics.__all__  # 返回评价指标列表
+
+    @property
+    def field_names(self) -> List[str]:
+        return self.evaluator.metric_names + [
+            FieldNames.FILE_NAME,
+            FieldNames.FIT_TIME,
+            FieldNames.INFERENCE_TIME,
+            FieldNames.ACTUAL_DATA,
+            FieldNames.INFERENCE_DATA,
+            FieldNames.LOG_INFO,
+        ]

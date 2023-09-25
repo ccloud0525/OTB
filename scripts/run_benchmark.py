@@ -1,19 +1,17 @@
 # -*- coding: utf-8 -*-
 import argparse
+import json
 import logging
 import os
-import json
-import warnings
-
 import sys
-
-from ts_benchmark.report.report_csv import report
+import warnings
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "../ts_benchmark/baselines/third_party")
 )
 
+from ts_benchmark.report.report_csv import report
 from ts_benchmark.common.constant import CONFIG_PATH
 from ts_benchmark.pipeline import pipeline
 from ts_benchmark.utils.parallel import ParallelBackend
@@ -220,7 +218,7 @@ if __name__ == "__main__":
     )
     try:
         log_filename = pipeline(data_loader_config, model_config, model_eval_config)
-        report_config["log_files_list"] = [log_filename]
+        report_config["log_files_list"] = log_filename
         report_config["saved_report_file_name"] = "test_report.csv"
         report(report_config)
     finally:

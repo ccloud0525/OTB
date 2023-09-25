@@ -1,15 +1,18 @@
 # -*- coding: utf-8 -*-
 import base64
+import pickle
 import time
 import traceback
-import pickle
+from typing import Any, List
 
-import numpy as np
 import pandas as pd
 
 from ts_benchmark.data_loader.data_pool import DataPool
+from ts_benchmark.evaluation.evaluator import Evaluator
 from ts_benchmark.evaluation.metrics import regression_metrics
+from ts_benchmark.evaluation.strategy.constants import FieldNames
 from ts_benchmark.evaluation.strategy.strategy import Strategy
+from ts_benchmark.models.get_model import ModelFactory
 from ts_benchmark.utils.data_processing import split_before
 
 
@@ -20,23 +23,23 @@ class FixedForecast(Strategy):
 
     REQUIRED_FIELDS = ["pred_len"]
 
-    def __init__(self, model_eval_config: dict):
+    def __init__(self, strategy_config: dict, evaluator: Evaluator):
         """
         初始化固定预测策略对象。
-        :param model_eval_config: 模型评估配置。
+        :param strategy_config: 模型评估配置。
         """
-        super().__init__(model_eval_config)
-        self.pred_len = self.model_eval_config["strategy_args"]["pred_len"]
+        super().__init__(strategy_config, evaluator)
+        self.pred_len = self.strategy_config["pred_len"]
 
-    def execute(self, series_name: str, model: object, evaluator: object) -> np.ndarray:
+    def execute(self, series_name: str, model_factory: ModelFactory) -> Any:
         """
         执行固定预测策略。
 
         :param series_name: 要执行预测的序列名称。
-        :param model: 所使用的模型对象。
-        :param evaluator: 评估器对象，用于评估结果。
+        :param model_factory: 模型对象的构造/工厂函数。
         :return: 评估结果。
         """
+        model = model_factory()
         data = DataPool().get_series(series_name)
         try:
             train_length = len(data) - self.pred_len
@@ -54,11 +57,11 @@ class FixedForecast(Strategy):
 
             actual = test.to_numpy()
 
-            single_series_results, log_info = evaluator.evaluate_with_log(
+            single_series_results, log_info = self.evaluator.evaluate_with_log(
                 actual, predict, train.values
             )  # 计算评价指标
 
-            Inference_data = pd.DataFrame(
+            inference_data = pd.DataFrame(
                 predict, columns=test.columns, index=test.index
             )
             actual_data_pickle = pickle.dumps(test)
@@ -67,23 +70,24 @@ class FixedForecast(Strategy):
                 "utf-8"
             )
 
-            Inference_data_pickle = pickle.dumps(Inference_data)
+            inference_data_pickle = pickle.dumps(inference_data)
             # 使用 base64 进行编码
-            Inference_data_pickle = base64.b64encode(Inference_data_pickle).decode(
+            inference_data_pickle = base64.b64encode(inference_data_pickle).decode(
                 "utf-8"
             )
 
             single_series_results += [
+                series_name,
                 end_fit_time - start_fit_time,
                 end_inference_time - end_fit_time,
                 actual_data_pickle,
-                Inference_data_pickle,
+                inference_data_pickle,
                 log_info,
             ]
 
-        except Exception:
-            log = traceback.format_exc()
-            single_series_results = evaluator.default_result()[:-1] + [log]
+        except Exception as e:
+            log = f"{traceback.format_exc()}\n{e}"
+            single_series_results = self.get_default_result(**{FieldNames.LOG_INFO: log})
 
         return single_series_results
 
@@ -95,3 +99,14 @@ class FixedForecast(Strategy):
         :return: 评价指标列表。
         """
         return regression_metrics.__all__  # 返回评价指标列表
+
+    @property
+    def field_names(self) -> List[str]:
+        return self.evaluator.metric_names + [
+            FieldNames.FILE_NAME,
+            FieldNames.FIT_TIME,
+            FieldNames.INFERENCE_TIME,
+            FieldNames.ACTUAL_DATA,
+            FieldNames.INFERENCE_DATA,
+            FieldNames.LOG_INFO,
+        ]
