@@ -14,14 +14,6 @@ class Evaluator:
     评估器类，用于计算模型的评价指标。
     """
 
-    METRICS_NAME = [
-        "fit_time",
-        "inference_time",
-        "actual_data",
-        "inference_data",
-        "log",
-    ]
-
     def __init__(self, metric: List[dict]):
         """
         初始化评估器对象。
@@ -42,8 +34,6 @@ class Evaluator:
                 self.metric_funcs.append(functools.partial(fun, **metric_name_copy))
             else:
                 self.metric_funcs.append(fun)
-        self.metric_names += self.METRICS_NAME
-        self.n_metrics = len(self.metric_names)
 
     def evaluate(
         self, actual: np.ndarray, predicted: np.ndarray, hist_data: np.ndarray
@@ -87,4 +77,4 @@ class Evaluator:
 
         :return: 默认评价指标结果。
         """
-        return self.n_metrics * [np.nan]
+        return len(self.metric_names) * [np.nan]

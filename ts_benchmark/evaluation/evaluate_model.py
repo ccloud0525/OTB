@@ -1,34 +1,38 @@
 # -*- coding: utf-8 -*-
+import functools
+import json
 import logging
 import traceback
-from typing import Callable, Tuple, Any
+from typing import Callable, Tuple, List, Generator
 
 import pandas as pd
 import tqdm
-from pandas import DataFrame
 
 from ts_benchmark.data_loader.data_pool import DataPool
 from ts_benchmark.evaluation.evaluator import Evaluator
 from ts_benchmark.evaluation.strategy import STRATEGY
+from ts_benchmark.evaluation.strategy.constants import FieldNames
+from ts_benchmark.evaluation.strategy.strategy import Strategy
+from ts_benchmark.models.get_model import ModelFactory
 from ts_benchmark.utils.parallel import ParallelBackend
 
 logger = logging.getLogger(__name__)
 
 
-def _safe_execute(fn, args, evaluator):
+def _safe_execute(fn: Callable, args: Tuple, get_default_result: Callable):
     """
     make sure execution does not crash even if there are exceptions
     """
     try:
         return fn(*args)
     except Exception as e:
-        log = traceback.format_exc()
-        return evaluator.default_result()[:-1] + [f"{log}\n{e}"]
+        log = f"{traceback.format_exc()}\n{e}"
+        return get_default_result(**{FieldNames.LOG_INFO: log})
 
 
 def eval_model(
-    model_factory: Callable, series_list: list, model_eval_config: dict
-) -> Tuple[DataFrame, Any]:
+    model_factory: ModelFactory, series_list: list, model_eval_config: dict
+) -> Generator[pd.DataFrame, None, None]:
     """
     评估模型在时间序列数据上的性能。
     根据提供的模型工厂、时间序列列表和评估配置，对模型进行评估，并返回评估结果的 DataFrame。
@@ -70,24 +74,67 @@ def eval_model(
     # 创建评估器实例
     evaluator = Evaluator(metric)
 
-    strategy = strategy_class(model_eval_config)  # 创建评估策略对象
+    strategy = strategy_class(model_eval_config["strategy_args"], evaluator)  # 创建评估策略对象
 
     eval_backend = ParallelBackend()
 
     result_list = []
     for series_name in tqdm.tqdm(series_list, desc="scheduling..."):
-        model = model_factory()  # 创建模型实例
-        # single_series_results = strategy.execute(
-        #     series_name, model, evaluator
-        # )  # 执行策略评估
         # TODO: refactor data model to optimize communication cost in parallel mode
-        result_list.append(eval_backend.schedule(strategy.execute, (series_name, model, evaluator)))
+        result_list.append(
+            eval_backend.schedule(strategy.execute, (series_name, model_factory))
+        )
         # result_list.append(single_series_results)
 
-    result_list = [_safe_execute(it.result, (), evaluator) for it in tqdm.tqdm(result_list, desc="collecting...")]
+    collector = strategy.get_collector()
+    for i, result in enumerate(tqdm.tqdm(result_list,  desc="collecting...")):
+        collector.add(
+            _safe_execute(
+                result.result,
+                (),
+                functools.partial(
+                    strategy.get_default_result,
+                    **{FieldNames.FILE_NAME: series_list[i]},
+                ),
+            )
+        )
+        if collector.get_size() > 100000:
+            result_df = build_result_df(collector.collect(), model_factory, strategy)
+            yield result_df
+            collector.reset()
+
+    if collector.get_size() > 0:
+        result_df = build_result_df(collector.collect(), model_factory, strategy)
+        yield result_df
+
+    # result_list = [_safe_execute(it.result, (), evaluator) for it in tqdm.tqdm(result_list, desc="collecting...")]
 
     # 使用列表解析选择需要的列，并构造 DataFrame
 
-    result_df = pd.DataFrame(result_list, columns=evaluator.metric_names)
-    result_df.insert(0, "file_name", series_list)
-    return result_df, strategy.get_config_str()
+    # result_df = pd.DataFrame(result_list, columns=evaluator.metric_names)
+    # result_df.insert(0, "file_name", series_list)
+    # return result_df, strategy.get_config_str()
+
+
+def build_result_df(
+    result_list: List, model_factory: ModelFactory, strategy: Strategy
+) -> pd.DataFrame:
+    result_df = pd.DataFrame(result_list, columns=strategy.field_names)
+    if FieldNames.MODEL_PARAMS not in result_df.columns:
+        # allow models to do hyper-param search and return independent model_params for each search
+        result_df.insert(
+            0,
+            FieldNames.MODEL_PARAMS,
+            json.dumps(model_factory.model_hyper_params, sort_keys=True),
+        )
+    result_df.insert(0, FieldNames.STRATEGY_ARGS, strategy.get_config_str())
+    result_df.insert(0, FieldNames.MODEL_NAME, model_factory.model_name)
+
+    missing_fields = set(FieldNames.all_fields()) - set(result_df.columns)
+    if missing_fields:
+        raise ValueError(
+            "These required fields are missing in the result df: {}".format(
+                missing_fields
+            )
+        )
+    return result_df

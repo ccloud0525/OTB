@@ -2,11 +2,11 @@
 from ts_benchmark.evaluation.strategy.fixed_forecast import FixedForecast
 from ts_benchmark.evaluation.strategy.anomaly_detect import FixedDetectScore, FixedDetectLabel, UnFixedDetectScore, \
     UnFixedDetectLabel, AllDetectScore, AllDetectLabel
-from ts_benchmark.evaluation.strategy.rolling_forecast import RollingForecst
+from ts_benchmark.evaluation.strategy.rolling_forecast import RollingForecast
 
 STRATEGY = {
     "fixed_forecast": FixedForecast,
-    "rolling_forecast": RollingForecst,
+    "rolling_forecast": RollingForecast,
     "fixed_detect_score": FixedDetectScore,
     "fixed_detect_label": FixedDetectLabel,
     "unfixed_detect_score": UnFixedDetectScore,

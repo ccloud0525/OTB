@@ -42,8 +42,8 @@ class MerlionModelAdapter:
     def __init__(
         self,
         model_name: str,
-        model_class: object,
-        config_class: object,
+        model_class: type,
+        config_class: type,
         model_args: dict,
         allow_label_on_train: bool,
     ):
@@ -71,13 +71,13 @@ class MerlionModelAdapter:
         :param label: 标签数据。
         :return: 拟合后的模型对象。
         """
-        self.config_class = self.config_class(**self.model_args)
-        self.model = self.model_class(self.config_class)
+        config_obj = self.config_class(**self.model_args)
+        self.model = self.model_class(config_obj)
         series = TimeSeries.from_pd(series)
         label = TimeSeries.from_pd(label)
-        if self.allow_label_on_train == True:
+        if self.allow_label_on_train:
             return self.model.train(train_data=series, anomaly_labels=label)
-        elif self.allow_label_on_train == False:
+        else:
             return self.model.train(series)
 
     def detect_score(self, train: pd.DataFrame) -> np.ndarray:

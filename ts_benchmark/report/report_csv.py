@@ -72,7 +72,7 @@ def extract_info_and_merge(
 
     # Combine and process data
     model_config_of_evaluated_algorithm = results_of_evaluated_algorithm[
-        "model_eval_config"
+        "strategy_args"
     ][0]
     data_filename_list_of_evaluated_algorithm = results_of_evaluated_algorithm[
         "file_name"
@@ -81,6 +81,8 @@ def extract_info_and_merge(
         [results_of_evaluated_algorithm, baseline_result], ignore_index=True
     )
     return (
+        # TODO: change the name in accordance with the new header name
+        # TODO: the type of this variable seems to be str rather than dict???
         model_config_of_evaluated_algorithm,
         data_filename_list_of_evaluated_algorithm,
         adjusted_df,
@@ -113,7 +115,7 @@ def filter_data_and_calculate_result(
     """
     # Filter data and calculate means
     grouped_df = adjusted_df[
-        adjusted_df["model_eval_config"] == model_config_of_evaluated_algorithm
+        adjusted_df["strategy_args"] == model_config_of_evaluated_algorithm
     ]
 
     # 首先对 data_filename_list_of_evaluated_algorithm 进行去重操作
