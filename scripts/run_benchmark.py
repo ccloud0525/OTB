@@ -11,6 +11,7 @@ sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "../ts_benchmark/baselines/third_party")
 )
 
+from ts_benchmark.report import report_dash
 from ts_benchmark.report.report_csv import report
 from ts_benchmark.common.constant import CONFIG_PATH
 from ts_benchmark.pipeline import pipeline
@@ -142,7 +143,6 @@ if __name__ == "__main__":
         help="Select the baseline algorithm to compare",
     )
 
-
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -217,9 +217,12 @@ if __name__ == "__main__":
         default_timeout=args.timeout,
     )
     try:
-        log_filename = pipeline(data_loader_config, model_config, model_eval_config)
-        report_config["log_files_list"] = log_filename
-        report_config["saved_report_file_name"] = "test_report.csv"
-        report(report_config)
+        log_filenames = pipeline(data_loader_config, model_config, model_eval_config)
+        report_config["log_files_list"] = log_filenames
+        # TODO: 看这里默认用 csv report 还是 dash report，如果是后者则不需要这个参数。
+        #   另，建议把 saved_report_file_name 改成 output_file_name 或 leaderboard_file_name
+        # report_config["saved_report_file_name"] = "test_report.csv"
+        # report(report_config)
+        report_dash.report(report_config)
     finally:
         ParallelBackend().close(force=True)
