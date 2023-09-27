@@ -4,15 +4,12 @@ from __future__ import absolute_import
 
 import tarfile
 from io import BytesIO
-from typing import Dict
-
+from typing import Dict, Optional
 
 
 def compress_gz(data: Dict[str, str]) -> bytes:
     """
     以 gz 格式进行压缩
-
-
     """
     outbuf = BytesIO()
 
@@ -52,3 +49,9 @@ def get_compress_file_ext(method: str) -> str:
     if method != "gz":
         raise NotImplementedError("Only 'gz' method is supported by now")
     return "tar.gz"
+
+
+def get_compress_method_from_ext(ext: str) -> Optional[str]:
+    return {
+        "tar.gz": "gz"
+    }.get(ext)
