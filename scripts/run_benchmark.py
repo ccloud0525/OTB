@@ -3,15 +3,19 @@ import argparse
 import json
 import logging
 import os
+import random
 import sys
 import warnings
+
+import numpy as np
+import torch
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "../ts_benchmark/baselines/third_party")
 )
 
-from ts_benchmark.report import report_dash
+from ts_benchmark.report import report_dash, report_csv
 from ts_benchmark.report.report_csv import report
 from ts_benchmark.common.constant import CONFIG_PATH
 from ts_benchmark.pipeline import pipeline
@@ -143,6 +147,25 @@ if __name__ == "__main__":
         help="Select the baseline algorithm to compare",
     )
 
+    parser.add_argument(
+        "--report-method",
+        type=str,
+        default="csv",
+        choices=[
+            "dash",
+            "csv",
+        ],
+        help="Presentation form of algorithm performance comparison results",
+    )
+
+    # Set random seeds
+    parser.add_argument(
+        "--random-seed",
+        type=int,
+        default=None,
+        help="Whether to set random seeds",
+    )
+
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -150,6 +173,13 @@ if __name__ == "__main__":
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+
+    if args.random_seed is not None:
+        fix_seed = args.random_seed
+        random.seed(fix_seed)
+        torch.manual_seed(fix_seed)
+        np.random.seed(fix_seed)
+    #TODO：这里random seed不能影响ray actor内部的种子
 
     with open(os.path.join(CONFIG_PATH, args.config_path), "r") as file:
         config_data = json.load(file)
@@ -219,10 +249,10 @@ if __name__ == "__main__":
     try:
         log_filenames = pipeline(data_loader_config, model_config, model_eval_config)
         report_config["log_files_list"] = log_filenames
-        # TODO: 看这里默认用 csv report 还是 dash report，如果是后者则不需要这个参数。
-        #   另，建议把 saved_report_file_name 改成 output_file_name 或 leaderboard_file_name
-        # report_config["saved_report_file_name"] = "test_report.csv"
-        # report(report_config)
-        report_dash.report(report_config)
+        if args.report_method == "dash":
+            report_dash.report(report_config)
+        if args.report_method == "csv":
+            report_config["leaderboard_file_name"] = "test_report.csv"
+            report_csv.report(report_config)
     finally:
         ParallelBackend().close(force=True)
