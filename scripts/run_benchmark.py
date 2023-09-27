@@ -17,6 +17,7 @@ from ts_benchmark.common.constant import CONFIG_PATH
 from ts_benchmark.pipeline import pipeline
 from ts_benchmark.utils.parallel import ParallelBackend
 
+
 warnings.filterwarnings("ignore")
 
 if __name__ == "__main__":
