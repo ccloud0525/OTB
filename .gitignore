@@ -6,4 +6,4 @@ result/
 .vscode/
 .DS_Store
 ts/benchmark/.DS_Store
-venvs/
+venv/
