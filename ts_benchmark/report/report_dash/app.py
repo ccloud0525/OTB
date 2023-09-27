@@ -15,7 +15,7 @@ from flask import Flask, redirect
 from pandas.errors import ParserError
 
 from ts_benchmark.evaluation.strategy.constants import FieldNames
-from ts_benchmark.report.leader_board import leader_board
+from ts_benchmark.report.leader_board import get_leaderboard
 from ts_benchmark.report.report_dash.memory import READONLY_MEMORY
 from ts_benchmark.report.utils import read_log_file
 
@@ -58,11 +58,16 @@ def _load_log_data(log_files: List[str]) -> pd.DataFrame:
 
 
 def report(report_config: Dict) -> NoReturn:
-    leaderboard_df = leader_board(report_config)
-
     log_files: Union[List[str], pd.DataFrame] = report_config.get("log_files_list")
     if not log_files:
         raise ValueError("No log files to report")
+    leaderboard_df = get_leaderboard(
+        log_files,
+        report_config["aggregate_type"],
+        report_config["report_metrics"],
+        report_config["fill_type"],
+        report_config["null_value_threshold"],
+    )
 
     log_data = (
         log_files if isinstance(log_files, pd.DataFrame) else _load_log_data(log_files)

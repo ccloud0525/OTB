@@ -10,11 +10,10 @@ from ts_benchmark.report.report_dash.memory import READONLY_MEMORY
 
 dash.register_page(__name__)
 
-raw_data = READONLY_MEMORY["raw_data"]
 leaderboard_df = READONLY_MEMORY["leaderboard_df"]
 
 table = dash_table.DataTable(
-    id="leaderboard_df",
+    id="leaderboard",
     columns=format_data_columns(leaderboard_df),
     data=leaderboard_df.to_dict("records"),
     filter_action="native",

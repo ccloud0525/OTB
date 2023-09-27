@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import functools
+import math
 import traceback
 from typing import List, Tuple, Any
 
@@ -8,6 +9,13 @@ import numpy as np
 
 from ts_benchmark.evaluation.metrics import METRICS
 
+def encode_params(params):
+    encoded_pairs = []
+    for key, value in sorted(params.items()):
+        if isinstance(value, (np.floating, float)):
+            value = math.round(value, 3)
+        encoded_pairs.append(f"{key}:{repr(value)}")
+    return ";".join(encoded_pairs)
 
 class Evaluator:
     """
@@ -26,15 +34,11 @@ class Evaluator:
 
         # 创建评价指标函数和名称列表
         for metric_info in self.metric:
-            if len(metric_info) >= 2:
-                metric_name = f'{metric_info.get("name")};' + ";".join(
-                    f"{key}:{value}"
-                    for key, value in metric_info.items()
-                    if key != "name"
-                )
-                self.metric_names.append(metric_name)
-            else:
-                self.metric_names.append(metric_info.get("name"))
+            metric_info_copy = metric_info.copy()
+            metric_name = metric_info_copy.pop("name")
+            if metric_info_copy:
+                metric_name += ";" + encode_params(metric_info_copy)
+            self.metric_names.append(metric_name)
             metric_name_copy = metric_info.copy()
             name = metric_name_copy.pop("name")
             fun = METRICS[name]

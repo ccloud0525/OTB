@@ -2,7 +2,7 @@
 import os
 
 from ts_benchmark.common.constant import ROOT_PATH
-from ts_benchmark.report.leader_board import leader_board
+from ts_benchmark.report.leader_board import get_leaderboard
 
 
 def report(report_config: dict) -> None:
@@ -24,7 +24,13 @@ def report(report_config: dict) -> None:
     Returns:
     - None: The function does not return a value, but generates and saves a report to a CSV file.
     """
-    leaderboard_df = leader_board(report_config)
+    leaderboard_df = get_leaderboard(
+        report_config["log_files_list"],
+        report_config["aggregate_type"],
+        report_config["report_metrics"],
+        report_config["fill_type"],
+        report_config["null_value_threshold"],
+    )
 
     # Create final DataFrame and save to CSV
     leaderboard_df.to_csv(

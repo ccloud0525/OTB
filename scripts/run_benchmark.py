@@ -94,7 +94,6 @@ if __name__ == "__main__":
         "--metric-name",
         type=str,
         nargs="+",
-        # default={"name": "auc_pr", "seasonality": 10},
         default="all",
         help="metrics to be evaluated",
     )
@@ -149,9 +148,9 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "--display-form",
+        "--report-method",
         type=str,
-        default="csv",
+        default="dash",
         choices=[
             "dash",
             "csv",
@@ -212,7 +211,6 @@ if __name__ == "__main__":
         else [None] * len(args.model_name)
     )
 
-
     for adapter, model_name, model_hyper_params in zip(
         args.adapter, args.model_name, args.model_hyper_params
     ):
@@ -250,9 +248,9 @@ if __name__ == "__main__":
     try:
         log_filenames = pipeline(data_loader_config, model_config, model_eval_config)
         report_config["log_files_list"] = log_filenames
-        if args.display_form == "dash":
+        if args.report_method == "dash":
             report_dash.report(report_config)
-        if args.display_form == "csv":
+        if args.report_method == "csv":
             report_config["leaderboard_file_name"] = "test_report.csv"
             report_csv.report(report_config)
     finally:
