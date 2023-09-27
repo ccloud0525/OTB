@@ -109,7 +109,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--eval-backend",
         type=str,
-        default="ray",
+        default="sequential",
         choices=["sequential", "ray"],
         help="evaluation backend, use ray for parallel evaluation",
     )
