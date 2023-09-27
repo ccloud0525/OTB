@@ -1,8 +1,13 @@
 # -*- coding: utf-8 -*-
+
 import os
+from typing import Union, List
+
+import pandas as pd
 
 from ts_benchmark.common.constant import ROOT_PATH
-from ts_benchmark.report.leader_board import get_leaderboard
+from ts_benchmark.report.leaderboard import get_leaderboard
+from ts_benchmark.report.report_dash.app import _load_log_data
 
 
 def report(report_config: dict) -> None:
@@ -24,12 +29,21 @@ def report(report_config: dict) -> None:
     Returns:
     - None: The function does not return a value, but generates and saves a report to a CSV file.
     """
+    log_files: Union[List[str], pd.DataFrame] = report_config.get("log_files_list")
+    if not log_files:
+        raise ValueError("No log files to report")
+
+    log_data = (
+        log_files if isinstance(log_files, pd.DataFrame) else _load_log_data(log_files)
+    )
+
     leaderboard_df = get_leaderboard(
-        report_config["log_files_list"],
-        report_config["aggregate_type"],
+        log_files,
+        log_data,
+        report_config.get("aggregate_type", "mean"),
         report_config["report_metrics"],
-        report_config["fill_type"],
-        report_config["null_value_threshold"],
+        report_config.get("fill_type", "mean_value"),
+        report_config.get("null_value_threshold", 0.3),
     )
 
     # Create final DataFrame and save to CSV

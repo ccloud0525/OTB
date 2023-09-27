@@ -141,8 +141,110 @@ def filter_data_and_calculate_result(
     return metric_values, metric_df.columns.tolist()
 
 
+# def get_leaderboard(
+#     log_files_list: List[str],
+#     aggregate_type: str,
+#     report_metrics: Union[str, List[str]],
+#     fill_type: str,
+#     null_value_threshold: float,
+# ) -> pd.DataFrame:
+#     """
+#     Generate a report based on specified configuration parameters.
+#
+#     Parameters:
+#     - log_files_list (List[str]): A list of file paths for log files.
+#     - aggregate_type (str): The aggregation type used when reporting the final results of evaluation metrics.
+#     - report_metrics (Union[str, List[str]]): The metrics for the report, can be a string or a list of strings.
+#     - fill_type (str): The type of fill for missing values.
+#     - null_value_threshold (float): The threshold value for null metrics.
+#
+#     Raises:
+#     - ValueError: If all metrics have too many null values, making performance comparison impossible.
+#
+#     Returns:
+#     - None: The function does not return a value, but generates and saves a report to a CSV file.
+#     """
+#     evaluated_algorithm_columns = pd.read_csv(
+#         os.path.join(ROOT_PATH, log_files_list[0])
+#     ).columns.values
+#     for log_file in log_files_list[1:]:
+#         df = pd.read_csv(os.path.join(ROOT_PATH, log_file))
+#         log_file_columns = df.columns.values
+#         if not (evaluated_algorithm_columns == log_file_columns).all():
+#             raise ValueError(
+#                 f"Column names are inconsistent between {log_file} and {log_files_list[0]}"
+#             )
+#
+#     # Load data
+#     results_of_evaluated_algorithm = pd.read_csv(
+#         os.path.join(ROOT_PATH, log_files_list[0])
+#     )
+#     if isinstance(report_metrics, str):
+#         report_metrics = [report_metrics]
+#
+#     final_result = []
+#     many_null_metrics_nums = 0
+#     cols = []
+#     report_metrics_set = set(report_metrics)
+#     results_columns_set = set(results_of_evaluated_algorithm.columns.values)
+#     prefixes_set = set()
+#     for metric in results_columns_set:
+#         prefix = metric.split(";", 1)[0]
+#         prefixes_set.add(prefix)
+#
+#     mapping = {metric.split(";", 1)[0]: metric for metric in results_columns_set}
+#
+#     missing_metrics = report_metrics_set - prefixes_set
+#
+#     if missing_metrics:
+#         raise ValueError(
+#             "Metrics in report_config but not in results_of_evaluated_algorithm.columns:",
+#             list(missing_metrics),
+#         )
+#
+#     for metric_name in report_metrics:
+#         metric_name = mapping[metric_name]
+#         # 填补缺失值
+#         nan_count = results_of_evaluated_algorithm[metric_name].isna().sum()
+#         if nan_count > float(null_value_threshold) * len(
+#             results_of_evaluated_algorithm
+#         ):
+#             logging.warning(
+#                 "metric %s has too many null values, we drop this metric in this report",
+#                 metric_name,
+#             )
+#             many_null_metrics_nums = many_null_metrics_nums + 1
+#             continue
+#
+#         # Preserve the baseline algorithm for comparison
+#         (
+#             model_config_of_evaluated_algorithm,
+#             data_filename_list_of_evaluated_algorithm,
+#             adjusted_df,
+#         ) = extract_info_and_merge(log_files_list, results_of_evaluated_algorithm)
+#
+#         single_metric_value, cols = filter_data_and_calculate_result(
+#             metric_name,
+#             aggregate_type,
+#             null_value_threshold,
+#             fill_type,
+#             adjusted_df,
+#             model_config_of_evaluated_algorithm,
+#             data_filename_list_of_evaluated_algorithm,
+#         )
+#         final_result.append(single_metric_value)
+#
+#     if many_null_metrics_nums == len(report_metrics):
+#         raise ValueError(
+#             "all metric has too many null values, we cannot obtain a performance "
+#             "comparison between this algorithm and the baseline algorithm"
+#         )
+#     else:
+#         result_df = pd.DataFrame(final_result, columns=["metric_name"] + cols)
+#         return result_df
 def get_leaderboard(
     log_files_list: List[str],
+    log_data: pd.DataFrame,
     aggregate_type: str,
     report_metrics: Union[str, List[str]],
     fill_type: str,
@@ -153,6 +255,7 @@ def get_leaderboard(
 
     Parameters:
     - log_files_list (List[str]): A list of file paths for log files.
+    - log_data (pd.DataFrame): merged dataframe of log files
     - aggregate_type (str): The aggregation type used when reporting the final results of evaluation metrics.
     - report_metrics (Union[str, List[str]]): The metrics for the report, can be a string or a list of strings.
     - fill_type (str): The type of fill for missing values.
@@ -164,16 +267,6 @@ def get_leaderboard(
     Returns:
     - None: The function does not return a value, but generates and saves a report to a CSV file.
     """
-    evaluated_algorithm_columns = pd.read_csv(
-        os.path.join(ROOT_PATH, log_files_list[0])
-    ).columns.values
-    for log_file in log_files_list[1:]:
-        df = pd.read_csv(os.path.join(ROOT_PATH, log_file))
-        log_file_columns = df.columns.values
-        if not (evaluated_algorithm_columns == log_file_columns).all():
-            raise ValueError(
-                f"Column names are inconsistent between {log_file} and {log_files_list[0]}"
-            )
 
     # Load data
     results_of_evaluated_algorithm = pd.read_csv(
@@ -216,12 +309,13 @@ def get_leaderboard(
             many_null_metrics_nums = many_null_metrics_nums + 1
             continue
 
-        # Preserve the baseline algorithm for comparison
-        (
-            model_config_of_evaluated_algorithm,
-            data_filename_list_of_evaluated_algorithm,
-            adjusted_df,
-        ) = extract_info_and_merge(log_files_list, results_of_evaluated_algorithm)
+        model_config_of_evaluated_algorithm = results_of_evaluated_algorithm[
+            "strategy_args"
+        ][0]
+        data_filename_list_of_evaluated_algorithm = results_of_evaluated_algorithm[
+            "file_name"
+        ]
+        adjusted_df = log_data
 
         single_metric_value, cols = filter_data_and_calculate_result(
             metric_name,

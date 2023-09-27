@@ -109,7 +109,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--eval-backend",
         type=str,
-        default="sequential",
+        default="ray",
         choices=["sequential", "ray"],
         help="evaluation backend, use ray for parallel evaluation",
     )
@@ -150,7 +150,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--report-method",
         type=str,
-        default="dash",
+        default="csv",
         choices=[
             "dash",
             "csv",
@@ -179,6 +179,7 @@ if __name__ == "__main__":
         random.seed(fix_seed)
         torch.manual_seed(fix_seed)
         np.random.seed(fix_seed)
+    #TODO：这里random seed不能影响ray actor内部的种子
 
     with open(os.path.join(CONFIG_PATH, args.config_path), "r") as file:
         config_data = json.load(file)

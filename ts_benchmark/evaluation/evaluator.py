@@ -13,7 +13,7 @@ def encode_params(params):
     encoded_pairs = []
     for key, value in sorted(params.items()):
         if isinstance(value, (np.floating, float)):
-            value = math.round(value, 3)
+            value = round(value, 3)
         encoded_pairs.append(f"{key}:{repr(value)}")
     return ";".join(encoded_pairs)
 
