@@ -16,7 +16,6 @@ sys.path.insert(
 )
 
 from ts_benchmark.report import report_dash, report_csv
-from ts_benchmark.report.report_csv import report
 from ts_benchmark.common.constant import CONFIG_PATH
 from ts_benchmark.pipeline import pipeline
 from ts_benchmark.utils.parallel import ParallelBackend
@@ -170,7 +169,7 @@ if __name__ == "__main__":
 
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        format="%(asctime)s [%(levelname)s] %(name)s(%(lineno)d): %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
@@ -248,11 +247,12 @@ if __name__ == "__main__":
     )
     try:
         log_filenames = pipeline(data_loader_config, model_config, model_eval_config)
-        report_config["log_files_list"] = log_filenames
-        if args.report_method == "dash":
-            report_dash.report(report_config)
-        if args.report_method == "csv":
-            report_config["leaderboard_file_name"] = "test_report.csv"
-            report_csv.report(report_config)
     finally:
         ParallelBackend().close(force=True)
+
+    report_config["log_files_list"] = log_filenames
+    if args.report_method == "dash":
+        report_dash.report(report_config)
+    elif args.report_method == "csv":
+        report_config["leaderboard_file_name"] = "test_report.csv"
+        report_csv.report(report_config)

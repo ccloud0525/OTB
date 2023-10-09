@@ -17,11 +17,12 @@ from ts_benchmark.utils.parallel.base import TaskResult
 
 logger = logging.getLogger(__name__)
 
+
 class RayActor:
     def __init__(self):
         self._idle = True
         self._start_time = None
-        sys.path.insert(0,"ts_benchmark/baselines/third_party")
+        sys.path.insert(0, "ts_benchmark/baselines/third_party")
 
     def run(self, fn: Callable, args: Tuple) -> Any:
         self._start_time = time.time()
@@ -71,7 +72,7 @@ class RayActorPool:
     """
 
     def __init__(self, n_workers: int, per_worker_resources: Optional[Dict] = None):
-        if per_worker_resources:
+        if per_worker_resources is None:
             per_worker_resources = {}
 
         self.actor_class = ray.remote(
@@ -79,7 +80,12 @@ class RayActorPool:
             num_cpus=per_worker_resources.get("num_cpus", 1),
             num_gpus=per_worker_resources.get("num_gpus", 0),
         )(RayActor)
-        self.actors = [self.actor_class.options(max_concurrency=2).remote() for _ in range(n_workers)]
+        # TODO: On the Windows platform, when GPU resources are allocated in the actors,
+        #  the ray tasks sometimes terminate ungracefully, leaving the concurrency counter in a wrong state
+        #  As a temporary workaround, we are removing the limit of max_concurrency in this case,
+        #  which may lead to unexpected overhead.
+        max_concurrency = None if sys.platform == "win32" else 2
+        self.actors = [self.actor_class.options(max_concurrency=max_concurrency).remote() for _ in range(n_workers)]
 
         # these data are only accessed in the main thread
         self._task_counter = itertools.count()
@@ -128,7 +134,7 @@ class RayActorPool:
                 return None
 
         return -1 if task_info.start_time is None else time.time() - task_info.start_time
-    
+
     def _handle_unfinished_tasks(self, tasks: List) -> NoReturn:
         new_active_tasks = []
         for task_obj in tasks:
@@ -203,7 +209,8 @@ class RayActorPool:
 
 class RayBackend:
 
-    def __init__(self, n_workers: Optional[int] = None, n_cpus: Optional[int] = None, gpu_devices: Optional[List[int]] = None):
+    def __init__(self, n_workers: Optional[int] = None, n_cpus: Optional[int] = None,
+                 gpu_devices: Optional[List[int]] = None):
         if n_cpus is None:
             n_cpus = os.cpu_count()
         if n_workers is None:
@@ -244,6 +251,7 @@ if __name__ == "__main__":
         time.sleep(t)
         print(f"sleep after {t}")
         return t
+
 
     results = []
     results.append(backend.schedule(sleep_func, (10,), timeout=5))

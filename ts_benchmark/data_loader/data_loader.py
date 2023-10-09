@@ -57,7 +57,6 @@ def load_data(data_loader_config: dict) -> List[str]:
         data_meta[reduce(and_, (data_meta[k] == v for k, v in feature_dict.items()))][
             data_meta["size"].isin(data_size)
         ]
-        .iloc[:, 0]
         .tolist()
     )
     return data_name_list
