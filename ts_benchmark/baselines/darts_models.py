@@ -1,5 +1,5 @@
 import logging
-from typing import Type, Dict
+from typing import Dict
 
 import darts
 import numpy as np
@@ -38,8 +38,6 @@ from darts.models import (
 
 if darts.__version__ >= "0.25.0":
     from darts.models.utils import NotImportedModule
-
-logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -109,14 +107,15 @@ class DartsModelAdapter:
 
 
 def generate_model_factory(
-    model_name: str, model_class: object, required_args: dict, allow_fit_on_eval: bool
+    model_name: str, model_class: object, model_args: dict, required_args: dict, allow_fit_on_eval: bool
 ) -> Dict:
     """
     生成模型工厂信息，用于创建 Darts 模型适配器。
 
     :param model_name: 模型名称。
     :param model_class: Darts 模型类。
-    :param required_args: 模型初始化所需参数。
+    :param model_args: 预定义的模型超参数，可以被输入工厂函数的超参数覆盖。
+    :param required_args: 需要由 benchmark 推荐的超参数。
     :param allow_fit_on_eval: 是否允许在预测阶段拟合模型。
     :return: 包含模型工厂和所需参数的字典。
     """
@@ -131,107 +130,114 @@ def generate_model_factory(
         return DartsModelAdapter(
             model_name,
             model_class,
-            kwargs,
+            {**model_args, **kwargs},
             allow_fit_on_eval,
         )
 
     return {"model_factory": model_factory, "required_hyper_params": required_args}
 
 
-DARTS_DEEP_MODEL_DEFAULT_ARGS1 = {
+DARTS_DEEP_MODEL_REQUIRED_ARGS1 = {
     "input_chunk_length": "input_chunk_length",
     "output_chunk_length": "output_chunk_length",
 }
-DARTS_DEEP_MODEL_DEFAULT_ARGS2 = {"lags": "input_chunk_length"}
+DARTS_DEEP_MODEL_REQUIRED_ARGS2 = {"lags": "input_chunk_length"}
+DARTS_DEEP_MODEL_ARGS = {
+    "pl_trainer_kwargs": {
+        "enable_progress_bar": False,
+    }
+}
 
 DARTS_MODELS = [
-    (ARIMA, {}),
-    (VARIMA, {}),
-    (KalmanForecaster, {}),
-    (TCNModel, DARTS_DEEP_MODEL_DEFAULT_ARGS1),
+    (ARIMA, {}, {}),
+    (VARIMA, {}, {}),
+    (KalmanForecaster, {}, {}),
+    (TCNModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, {}),
     (
         TFTModel,
-        {
-            "input_chunk_length": "input_chunk_length",
-            "output_chunk_length": "output_chunk_length",
-            "add_relative_index": "add_relative_index",
-        },
+        DARTS_DEEP_MODEL_REQUIRED_ARGS1,
+        DARTS_DEEP_MODEL_ARGS,
     ),
-    (TransformerModel, DARTS_DEEP_MODEL_DEFAULT_ARGS1),
-    (NHiTSModel, DARTS_DEEP_MODEL_DEFAULT_ARGS1),
-    (BlockRNNModel, DARTS_DEEP_MODEL_DEFAULT_ARGS1),
-    (RNNModel, DARTS_DEEP_MODEL_DEFAULT_ARGS1),
-    (DLinearModel, DARTS_DEEP_MODEL_DEFAULT_ARGS1),
-    (NBEATSModel, DARTS_DEEP_MODEL_DEFAULT_ARGS1),
-    (NLinearModel, DARTS_DEEP_MODEL_DEFAULT_ARGS1),
-    (RandomForest, DARTS_DEEP_MODEL_DEFAULT_ARGS2),
-    (XGBModel, DARTS_DEEP_MODEL_DEFAULT_ARGS2),
-    (CatBoostModel, DARTS_DEEP_MODEL_DEFAULT_ARGS2),
-    (LightGBMModel, DARTS_DEEP_MODEL_DEFAULT_ARGS2),
-    (LinearRegressionModel, DARTS_DEEP_MODEL_DEFAULT_ARGS2),
-    (RegressionModel, DARTS_DEEP_MODEL_DEFAULT_ARGS2),
+    (TransformerModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, DARTS_DEEP_MODEL_ARGS),
+    (NHiTSModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, DARTS_DEEP_MODEL_ARGS),
+    (BlockRNNModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, DARTS_DEEP_MODEL_ARGS),
+    (RNNModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, DARTS_DEEP_MODEL_ARGS),
+    (DLinearModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, DARTS_DEEP_MODEL_ARGS),
+    (NBEATSModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, DARTS_DEEP_MODEL_ARGS),
+    (NLinearModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, DARTS_DEEP_MODEL_ARGS),
+    (RandomForest, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
+    (XGBModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
+    (CatBoostModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
+    (LightGBMModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
+    (LinearRegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
+    (RegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
 ]
 
-DARTS_STAT_MODELS = [  # 特别允许推理时重新训练
-    (AutoARIMA, {}),
-    (StatsForecastAutoCES, {}),
-    (StatsForecastAutoTheta, {}),
-    (StatsForecastAutoETS, {}),
-    (ExponentialSmoothing, {}),
-    (StatsForecastAutoARIMA, {}),
-    (FFT, {}),
-    (FourTheta, {}),
-    (Croston, {}),
-    (NaiveDrift, {}),
+# 以下模型特别允许推理时重新训练
+DARTS_STAT_MODELS = [
+    (AutoARIMA, {}, {}),
+    (StatsForecastAutoCES, {}, {}),
+    (StatsForecastAutoTheta, {}, {}),
+    (StatsForecastAutoETS, {}, {}),
+    (ExponentialSmoothing, {}, {}),
+    (StatsForecastAutoARIMA, {}, {}),
+    (FFT, {}, {}),
+    (FourTheta, {}, {}),
+    (Croston, {}, {}),
+    (NaiveDrift, {}, {}),
 ]
 
 # 针对 DARTS_MODELS 中的每个模型类和所需参数生成模型工厂并添加到全局变量中
-for model_class, required_args in DARTS_MODELS:
+for model_class, required_args, model_args in DARTS_MODELS:
     if darts.__version__ >= "0.25.0" and isinstance(model_class, NotImportedModule):
         logger.warning("NotImportedModule encountered, skipping")
         continue
     globals()[f"darts_{model_class.__name__.lower()}"] = generate_model_factory(
-        model_class.__name__, model_class, required_args, allow_fit_on_eval=False
+        model_class.__name__, model_class, model_args, required_args, allow_fit_on_eval=False
     )
 
 # 针对 DARTS_STAT_MODELS 中的每个模型类和所需参数生成模型工厂并添加到全局变量中
-for model_class, required_args in DARTS_STAT_MODELS:
+for model_class, required_args, model_args in DARTS_STAT_MODELS:
     if darts.__version__ >= "0.25.0" and isinstance(model_class, NotImportedModule):
         logger.warning("NotImportedModule encountered, skipping")
         continue
     globals()[f"darts_{model_class.__name__.lower()}"] = generate_model_factory(
-        model_class.__name__, model_class, required_args, allow_fit_on_eval=True
+        model_class.__name__, model_class, model_args, required_args, allow_fit_on_eval=True
     )
 
 
-def deep_darts_model_adapter(model_info: Type[object]) -> object:
-    """
-    适配深度 DARTS 模型。
-
-    :param model_info: 要适配的深度 DARTS 模型类。必须是一个类或类型对象。
-    :return: 生成的模型工厂，用于创建适配的 DARTS 模型。
-    """
-    if not isinstance(model_info, type):
-        raise ValueError()
-
-    return generate_model_factory(
-        model_info.__name__,
-        model_info,
-        DARTS_DEEP_MODEL_DEFAULT_ARGS1,
-        allow_fit_on_eval=False,
-    )
-
-
-def statistics_darts_model_adapter(model_info: Type[object]) -> object:
-    """
-    适配统计学 DARTS 模型。
-
-    :param model_info: 要适配的统计学 DARTS 模型类。必须是一个类或类型对象。
-    :return: 生成的模型工厂，用于创建适配的 DARTS 模型。
-    """
-    if not isinstance(model_info, type):
-        raise ValueError()
-
-    return generate_model_factory(
-        model_info.__name__, model_info, {}, allow_fit_on_eval=True
-    )
+# TODO：darts 应该不止这两个 adapter，例如有些应该输入 DARTS_DEEP_MODEL_REQUIRED_ARGS2
+#   而非 DARTS_DEEP_MODEL_REQUIRED_ARGS1。
+#   因此暂时注释这两个 adapter，后续看是去掉这些 adapter 还是通过 inspect 来分析模型参数
+#   还是预先定义好模型与 adapter 之间的映射关系。
+# def deep_darts_model_adapter(model_info: Type[object]) -> object:
+#     """
+#     适配深度 DARTS 模型。
+#
+#     :param model_info: 要适配的深度 DARTS 模型类。必须是一个类或类型对象。
+#     :return: 生成的模型工厂，用于创建适配的 DARTS 模型。
+#     """
+#     if not isinstance(model_info, type):
+#         raise ValueError()
+#
+#     return generate_model_factory(
+#         model_info.__name__,
+#         model_info,
+#         DARTS_DEEP_MODEL_REQUIRED_ARGS1,
+#         allow_fit_on_eval=False,
+#     )
+#
+#
+# def statistics_darts_model_adapter(model_info: Type[object]) -> object:
+#     """
+#     适配统计学 DARTS 模型。
+#
+#     :param model_info: 要适配的统计学 DARTS 模型类。必须是一个类或类型对象。
+#     :return: 生成的模型工厂，用于创建适配的 DARTS 模型。
+#     """
+#     if not isinstance(model_info, type):
+#         raise ValueError()
+#
+#     return generate_model_factory(
+#         model_info.__name__, model_info, {}, allow_fit_on_eval=True
+#     )
