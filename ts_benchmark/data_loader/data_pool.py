@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import os
 from concurrent.futures import ThreadPoolExecutor
-from typing import Union, Tuple
+from typing import Union, NoReturn
 
 import pandas as pd
 
@@ -9,19 +9,8 @@ from ts_benchmark.common.constant import DATASET_PATH
 from ts_benchmark.common.constant import META_DETECTION_DATA_PATH
 from ts_benchmark.common.constant import META_FORECAST_DATA_PATH
 from ts_benchmark.utils.data_processing import read_data
-
-
-class Singleton(type):
-    """
-    用于通过meta class的方法构造单例类
-    """
-
-    _instance_dict = {}
-
-    def __call__(cls, *args, **kwargs):
-        if cls not in cls._instance_dict:
-            cls._instance_dict[cls] = super(Singleton, cls).__call__(*args, **kwargs)
-        return cls._instance_dict[cls]
+from ts_benchmark.utils.design_pattern import Singleton
+from ts_benchmark.utils.parallel import SharedStorage
 
 
 class DataPool(metaclass=Singleton):
@@ -35,12 +24,23 @@ class DataPool(metaclass=Singleton):
         """
         构造函数，初始化 DataPool 实例。
         """
-        self.forecast_data_meta = pd.read_csv(META_FORECAST_DATA_PATH)
-        self.detect_data_meta = pd.read_csv(META_DETECTION_DATA_PATH)
-        self.forecast_data_meta.set_index(self._DATA_KEY, drop=False, inplace=True)
-        self.detect_data_meta.set_index(self._DATA_KEY, drop=False, inplace=True)
-
+        self._forecast_data_meta = None
+        self._detect_data_meta = None
         self.data_pool = {}  # 创建一个字典用于存储数据
+
+    @property
+    def forecast_data_meta(self) -> pd.DataFrame:
+        if self._forecast_data_meta is None:
+            self._forecast_data_meta = pd.read_csv(META_FORECAST_DATA_PATH)
+            self._forecast_data_meta.set_index(self._DATA_KEY, drop=False, inplace=True)
+        return self._forecast_data_meta
+
+    @property
+    def detect_data_meta(self) -> pd.DataFrame:
+        if self._detect_data_meta is None:
+            self._detect_data_meta = pd.read_csv(META_DETECTION_DATA_PATH)
+            self._detect_data_meta.set_index(self._DATA_KEY, drop=False, inplace=True)
+        return self._detect_data_meta
 
     def _load_meta_info(self, series_name: str) -> Union[pd.Series, None]:
         """
@@ -105,3 +105,23 @@ class DataPool(metaclass=Singleton):
         if series_name not in self.data_pool:
             self.data_pool[series_name] = self._load_data(series_name)
         return self.data_pool[series_name][1]
+
+    def share_data(self, storage: SharedStorage) -> NoReturn:
+        """
+        make the current data shareable across multiple workers (if exists)
+
+        :param storage: the storage to share data with
+        """
+        storage.put("forecast_meta", self.forecast_data_meta)
+        storage.put("detect_meta", self.detect_data_meta)
+        storage.put("data_pool", self.data_pool)
+
+    def sync_data(self, storage: SharedStorage) -> NoReturn:
+        """
+        retrieve the data shared by the main process
+
+        :param storage: the shared storage to get data from
+        """
+        self._forecast_data_meta = storage.get("forecast_meta")
+        self._detect_data_meta = storage.get("detect_meta")
+        self.data_pool.update(storage.get("data_pool", {}))

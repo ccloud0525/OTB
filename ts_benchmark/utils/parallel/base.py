@@ -19,3 +19,18 @@ class TaskResult(metaclass=abc.ABCMeta):
         """
         set value of the result
         """
+
+
+class SharedStorage(metaclass=abc.ABCMeta):
+
+    @abc.abstractmethod
+    def put(self, name: str, value: Any) -> NoReturn:
+        """
+        store variable into storage
+        """
+
+    @abc.abstractmethod
+    def get(self, name: str, default_value: Any) -> Any:
+        """
+        get variable from storage
+        """

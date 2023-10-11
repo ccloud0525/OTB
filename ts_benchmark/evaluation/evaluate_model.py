@@ -8,7 +8,6 @@ from typing import Callable, Tuple, List, Generator
 import pandas as pd
 import tqdm
 
-from ts_benchmark.data_loader.data_pool import DataPool
 from ts_benchmark.evaluation.evaluator import Evaluator
 from ts_benchmark.evaluation.strategy import STRATEGY
 from ts_benchmark.evaluation.strategy.constants import FieldNames
@@ -42,9 +41,6 @@ def eval_model(
     :param model_eval_config: 评估配置信息，包括策略、评价指标等。
     :return: 包含评估结果的 DataFrame。
     """
-    # 获取数据池实例，加载数据
-    DataPool().prepare_data(series_list)
-
     # 获取策略类
     strategy_class = STRATEGY.get(model_eval_config["strategy_args"]["strategy_name"])
     if strategy_class is None:
