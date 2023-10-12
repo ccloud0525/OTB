@@ -8,7 +8,7 @@ import queue
 import sys
 import threading
 import time
-from typing import Callable, Tuple, Any, List, NoReturn, Optional, Dict
+from typing import Callable, Tuple, Any, List, NoReturn, Optional, Dict, Union
 
 import ray
 from ray import ObjectRef
@@ -319,19 +319,24 @@ class RayBackend:
         self.initialized = False
 
     def init(self) -> NoReturn:
-        if is_actor():
+        if self.initialized:
+            return
+
+        cpu_per_worker = self._get_cpus_per_worker(self.n_cpus, self.n_workers)
+        gpu_per_worker, gpu_devices = self._get_gpus_per_worker(
+            self.gpu_devices, self.n_workers
+        )
+
+        if not ray.is_initialized():
+            # in the main process
+            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, gpu_devices))
+            ray.init(num_cpus=self.n_cpus, num_gpus=len(gpu_devices))
+        else:
             raise RuntimeError("init is not allowed to be called in ray actors")
 
         # 'put' can only be called in the main process now,
         # so the storage is safe to be accessed in multiple processes
         self._storage = RaySharedStorage(ObjectRefStorageActor.remote())
-
-        cpu_per_worker = self.n_cpus / self.n_workers
-        gpu_per_worker = len(self.gpu_devices) / self.n_workers
-
-        if not ray.is_initialized():
-            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, self.gpu_devices))
-            ray.init(num_cpus=self.n_cpus, num_gpus=len(self.gpu_devices))
 
         env = {
             "storage": self.shared_storage,
@@ -345,6 +350,33 @@ class RayBackend:
             },
         )
         self.initialized = True
+
+    def _get_cpus_per_worker(self, n_cpus: int, n_workers: int) -> Union[int, float]:
+        if n_cpus > n_workers and n_cpus % n_workers != 0:
+            cpus_per_worker = n_cpus // n_workers
+            logger.info(
+                "only %d among %d cpus are used to match the number of workers",
+                cpus_per_worker * n_workers,
+                n_cpus,
+            )
+        else:
+            cpus_per_worker = n_cpus / n_workers
+        return cpus_per_worker
+
+    def _get_gpus_per_worker(
+        self, gpu_devices: List[int], n_workers: int
+    ) -> Tuple[Union[int, float], List[int]]:
+        n_gpus = len(gpu_devices)
+        if n_gpus > n_workers and n_gpus % n_workers != 0:
+            gpus_per_worker = n_gpus // n_workers
+            used_gpu_devices = gpu_devices[: gpus_per_worker * n_workers]
+            logger.info(
+                "only %s gpus are used to match the number of workers", used_gpu_devices
+            )
+        else:
+            gpus_per_worker = n_gpus / n_workers
+            used_gpu_devices = gpu_devices
+        return gpus_per_worker, used_gpu_devices
 
     def schedule(self, fn: Callable, args: Tuple, timeout: float = -1) -> RayResult:
         if not self.initialized:
