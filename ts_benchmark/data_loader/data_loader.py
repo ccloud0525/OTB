@@ -5,8 +5,8 @@ from typing import List
 
 import pandas as pd
 
-from ts_benchmark.common.constant import META_FORECAST_DATA_PATH
 from ts_benchmark.common.constant import META_DETECTION_DATA_PATH
+from ts_benchmark.common.constant import META_FORECAST_DATA_PATH
 
 SIZE = {
     "large_forecast": ["large", "medium", "small"],
