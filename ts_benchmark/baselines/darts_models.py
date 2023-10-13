@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Dict
 
 import darts
@@ -77,6 +78,31 @@ class DartsModelAdapter:
         :param series: 时间序列数据。
         :return: 拟合后的模型对象。
         """
+        # TODO: training and inferencing on multiple gpus with 'ddp' strategy is error prone
+        #  in complicated work flow, the problems include but not limited to:
+        #  - do heavy initialization in all processes (e.g. full data loading)
+        #  - hangs when the program is interrupted (e.g. exceptions that are caught elsewhere)
+        #  - not compatible with the parallel paradigm of ray
+        #  As a result, we disallow a single worker to work on multiple gpus by now, but what if
+        #  evaluating large-scale models is required in the future?
+        gpu_devices = list(
+            filter(None, os.environ.get("CUDA_VISIBLE_DEVICES", "").split(","))
+        )
+        if gpu_devices:
+            pl_args = self.model_args.get("pl_trainer_kwargs", {})
+            device_args = pl_args.get("devices", None)
+            if (
+                device_args is None
+                or (isinstance(device_args, list) and len(device_args) > 1)
+                or (isinstance(device_args, int) and device_args > 1)
+            ):
+                self.model_args.setdefault("pl_trainer_kwargs", {})
+                self.model_args["pl_trainer_kwargs"]["devices"] = [int(gpu_devices[0])]
+                logger.warning(
+                    "Multi-gpu training is not supported, using only gpu %s",
+                    self.model_args["pl_trainer_kwargs"]["devices"],
+                )
+
         self.model = self.model_class(**self.model_args)
         series = TimeSeries.from_dataframe(series)
 
@@ -107,7 +133,11 @@ class DartsModelAdapter:
 
 
 def generate_model_factory(
-    model_name: str, model_class: object, model_args: dict, required_args: dict, allow_fit_on_eval: bool
+    model_name: str,
+    model_class: object,
+    model_args: dict,
+    required_args: dict,
+    allow_fit_on_eval: bool,
 ) -> Dict:
     """
     生成模型工厂信息，用于创建 Darts 模型适配器。
@@ -193,7 +223,11 @@ for model_class, required_args, model_args in DARTS_MODELS:
         logger.warning("NotImportedModule encountered, skipping")
         continue
     globals()[f"darts_{model_class.__name__.lower()}"] = generate_model_factory(
-        model_class.__name__, model_class, model_args, required_args, allow_fit_on_eval=False
+        model_class.__name__,
+        model_class,
+        model_args,
+        required_args,
+        allow_fit_on_eval=False,
     )
 
 # 针对 DARTS_STAT_MODELS 中的每个模型类和所需参数生成模型工厂并添加到全局变量中
@@ -202,7 +236,11 @@ for model_class, required_args, model_args in DARTS_STAT_MODELS:
         logger.warning("NotImportedModule encountered, skipping")
         continue
     globals()[f"darts_{model_class.__name__.lower()}"] = generate_model_factory(
-        model_class.__name__, model_class, model_args, required_args, allow_fit_on_eval=True
+        model_class.__name__,
+        model_class,
+        model_args,
+        required_args,
+        allow_fit_on_eval=True,
     )
 
 
