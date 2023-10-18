@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-from typing import Optional, List, Callable, Tuple
+from typing import Optional, List, Callable, Tuple, NoReturn
 
-from ts_benchmark.data_loader.data_pool import Singleton
-from ts_benchmark.utils.parallel.base import TaskResult
+from ts_benchmark.utils.design_pattern import Singleton
+from ts_benchmark.utils.parallel.base import TaskResult, SharedStorage
 from ts_benchmark.utils.parallel.ray_backend import RayBackend
 from ts_benchmark.utils.parallel.sequential_backend import SequentialBackend
 
@@ -35,6 +35,7 @@ class ParallelBackend(metaclass=Singleton):
         if self.backend is not None:
             raise RuntimeError("Please close the backend before re-initializing")
         self.backend = self.BACKEND_DICT[backend](n_workers=n_workers, n_cpus=n_cpus, gpu_devices=gpu_devices)
+        self.backend.init()
         self.default_timeout = default_timeout
 
     def schedule(self, fn: Callable, args: Tuple, timeout: Optional[float] = None) -> TaskResult:
@@ -48,3 +49,10 @@ class ParallelBackend(metaclass=Singleton):
         if self.backend is not None:
             self.backend.close(force)
             self.backend = None
+
+    @property
+    def shared_storage(self) -> SharedStorage:
+        return self.backend.shared_storage
+
+    def notify_data_shared(self) -> NoReturn:
+        self.backend.notify_data_shared()

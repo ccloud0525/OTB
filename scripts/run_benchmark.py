@@ -255,4 +255,6 @@ if __name__ == "__main__":
         report_dash.report(report_config)
     elif args.report_method == "csv":
         report_config["leaderboard_file_name"] = "test_report.csv"
+
         report_csv.report(report_config)
+

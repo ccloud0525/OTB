@@ -2,9 +2,11 @@
 from typing import List
 
 from ts_benchmark.data_loader.data_loader import load_data
+from ts_benchmark.data_loader.data_pool import DataPool
 from ts_benchmark.evaluation.evaluate_model import eval_model
 from ts_benchmark.models.get_model import get_model
 from ts_benchmark.report.save_log import save_log
+from ts_benchmark.utils.parallel import ParallelBackend
 
 
 def pipeline(
@@ -21,6 +23,12 @@ def pipeline(
     # 加载数据
     series_list = load_data(data_loader_config)
 
+    # 获取数据池实例，加载数据
+    data_pool = DataPool()
+    data_pool.prepare_data(series_list)
+    data_pool.share_data(ParallelBackend().shared_storage)
+    ParallelBackend().notify_data_shared()
+
     # 构建模型
     model_factory_list = get_model(model_config)
 
@@ -31,7 +39,6 @@ def pipeline(
         for i, result_df in enumerate(eval_model(
             model_factory, series_list, model_eval_config
         )):
-
             # 获得测评的模型名称
             model_name = model_config["models"][index]["model_name"].split(".")[-1]
 
