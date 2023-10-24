@@ -15,6 +15,7 @@ from ts_benchmark.evaluation.strategy.constants import FieldNames
 from ts_benchmark.evaluation.strategy.strategy import Strategy
 from ts_benchmark.models.get_model import ModelFactory
 from ts_benchmark.utils.data_processing import split_before
+from ts_benchmark.utils.random_utils import fix_random_seed
 
 
 class RollingForecast(Strategy):
@@ -62,6 +63,8 @@ class RollingForecast(Strategy):
         :param model_factory: 模型对象的构造/工厂函数。
         :return: 评估结果的平均值。
         """
+        fix_random_seed()
+
         model = model_factory()
 
         data = DataPool().get_series(series_name)

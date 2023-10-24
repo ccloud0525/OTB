@@ -2,8 +2,9 @@
 
 from __future__ import absolute_import
 
+import os
 import warnings
-from typing import Tuple, Any, NoReturn, Callable
+from typing import Tuple, Any, NoReturn, Callable, Optional, List
 
 from ts_benchmark.utils.parallel.base import TaskResult, SharedStorage
 
@@ -34,12 +35,14 @@ class SequentialSharedStorage(SharedStorage):
 
 class SequentialBackend:
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, gpu_devices: Optional[List[int]] = None, **kwargs):
         super().__init__()
+        self.gpu_devices = gpu_devices if gpu_devices is not None else []
         self.storage = None
 
     def init(self) -> NoReturn:
         self.storage = SequentialSharedStorage()
+        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, self.gpu_devices))
 
     def schedule(self, fn: Callable, args: Tuple, timeout: float = -1) -> SequentialResult:
         if timeout != -1:

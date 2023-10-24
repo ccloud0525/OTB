@@ -8,7 +8,7 @@ import queue
 import sys
 import threading
 import time
-from typing import Callable, Tuple, Any, List, NoReturn, Optional, Dict, Union
+from typing import Callable, Tuple, Any, List, NoReturn, Optional, Dict
 
 import ray
 from ray import ObjectRef
@@ -33,6 +33,7 @@ class RayActor:
         self._start_time = None
         sys.path.insert(0, "ts_benchmark/baselines/third_party")
 
+        sync_data(env["storage"])
 
     def run(self, fn: Callable, args: Tuple) -> Any:
         self._start_time = time.time()
@@ -112,10 +113,10 @@ class RayActorPool:
 
     和 ray 的内置 ActorPool 不同，本实现试图支持为每个任务限时
     """
+
     def __init__(
         self, n_workers: int, env: Dict, per_worker_resources: Optional[Dict] = None
     ):
-
         if per_worker_resources is None:
             per_worker_resources = {}
 
@@ -126,7 +127,6 @@ class RayActorPool:
             num_cpus=per_worker_resources.get("num_cpus", 1),
             num_gpus=per_worker_resources.get("num_gpus", 0),
         )(RayActor)
-
         self.actors = [self._new_actor() for _ in range(n_workers)]
 
         # these data are only accessed in the main thread
@@ -156,7 +156,7 @@ class RayActorPool:
             1000
             if sys.platform == "win32"
             and self.per_worker_resources.get("num_gpus", 0) > 0
-            else 2
+            else 1000
         )
         return self.actor_class.options(max_concurrency=max_concurrency).remote(
             self.env
@@ -205,7 +205,6 @@ class RayActorPool:
         return (
             -1 if task_info.start_time is None else time.time() - task_info.start_time
         )
-
 
     def _handle_unfinished_tasks(self, tasks: List) -> NoReturn:
         new_active_tasks = []
@@ -320,19 +319,14 @@ class RayBackend:
         self.initialized = False
 
     def init(self) -> NoReturn:
-        if self.initialized:
-            return
-
-        cpu_per_worker = self._get_cpus_per_worker(self.n_cpus, self.n_workers)
-        gpu_per_worker, gpu_devices = self._get_gpus_per_worker(
-            self.gpu_devices, self.n_workers
-        )
+        cpu_per_worker = self.n_cpus / self.n_workers
+        gpu_per_worker = len(self.gpu_devices) / self.n_workers
 
         if not ray.is_initialized():
-            # in the main process
-            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, gpu_devices))
-            ray.init(num_cpus=self.n_cpus, num_gpus=len(gpu_devices))
-        else:
+            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, self.gpu_devices))
+            ray.init(num_cpus=self.n_cpus, num_gpus=len(self.gpu_devices))
+
+        if is_actor():
             raise RuntimeError("init is not allowed to be called in ray actors")
 
         # 'put' can only be called in the main process now,
@@ -351,33 +345,6 @@ class RayBackend:
             },
         )
         self.initialized = True
-
-    def _get_cpus_per_worker(self, n_cpus: int, n_workers: int) -> Union[int, float]:
-        if n_cpus > n_workers and n_cpus % n_workers != 0:
-            cpus_per_worker = n_cpus // n_workers
-            logger.info(
-                "only %d among %d cpus are used to match the number of workers",
-                cpus_per_worker * n_workers,
-                n_cpus,
-            )
-        else:
-            cpus_per_worker = n_cpus / n_workers
-        return cpus_per_worker
-
-    def _get_gpus_per_worker(
-        self, gpu_devices: List[int], n_workers: int
-    ) -> Tuple[Union[int, float], List[int]]:
-        n_gpus = len(gpu_devices)
-        if n_gpus > n_workers and n_gpus % n_workers != 0:
-            gpus_per_worker = n_gpus // n_workers
-            used_gpu_devices = gpu_devices[: gpus_per_worker * n_workers]
-            logger.info(
-                "only %s gpus are used to match the number of workers", used_gpu_devices
-            )
-        else:
-            gpus_per_worker = n_gpus / n_workers
-            used_gpu_devices = gpu_devices
-        return gpus_per_worker, used_gpu_devices
 
     def schedule(self, fn: Callable, args: Tuple, timeout: float = -1) -> RayResult:
         if not self.initialized:
@@ -424,7 +391,6 @@ if __name__ == "__main__":
         time.sleep(t)
         print(f"sleep after {t}")
         return t
-
 
     results = []
     results.append(backend.schedule(sleep_func, (10,), timeout=5))

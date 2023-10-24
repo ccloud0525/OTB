@@ -10,11 +10,12 @@ import warnings
 import numpy as np
 import torch
 
+
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "../ts_benchmark/baselines/third_party")
 )
-
+from ts_benchmark.utils.get_file_name import get_log_file_name
 from ts_benchmark.report import report_dash, report_csv
 from ts_benchmark.common.constant import CONFIG_PATH
 from ts_benchmark.pipeline import pipeline
@@ -41,6 +42,8 @@ if __name__ == "__main__":
             "fixed_detect_label_config.json",
             "unfixed_detect_score_config.json",
             "unfixed_detect_label_config.json",
+            "all_detect_score_config.json",
+            "all_detect_label_config.json",
         ],
         help="evaluation config file path",
     )
@@ -178,7 +181,7 @@ if __name__ == "__main__":
         random.seed(fix_seed)
         torch.manual_seed(fix_seed)
         np.random.seed(fix_seed)
-    #TODO：这里random seed不能影响ray actor内部的种子
+    # TODO：这里random seed不能影响ray actor内部的种子
 
     with open(os.path.join(CONFIG_PATH, args.config_path), "r") as file:
         config_data = json.load(file)
@@ -254,7 +257,9 @@ if __name__ == "__main__":
     if args.report_method == "dash":
         report_dash.report(report_config)
     elif args.report_method == "csv":
-        report_config["leaderboard_file_name"] = "test_report.csv"
-
+        # report_config["leaderboard_file_name"] = "test_report.csv"
+        filename = get_log_file_name()
+        leaderboard_file_name = "test_report" + filename
+        # report_config["leaderboard_file_name"] = "test_report.csv"
+        report_config["leaderboard_file_name"] = leaderboard_file_name
         report_csv.report(report_config)
-

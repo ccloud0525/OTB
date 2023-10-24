@@ -5,8 +5,8 @@ from typing import List
 
 import pandas as pd
 
-from ts_benchmark.common.constant import META_DETECTION_DATA_PATH
 from ts_benchmark.common.constant import META_FORECAST_DATA_PATH
+from ts_benchmark.common.constant import META_DETECTION_DATA_PATH
 
 SIZE = {
     "large_forecast": ["large", "medium", "small"],
@@ -56,7 +56,11 @@ def load_data(data_loader_config: dict) -> List[str]:
     data_name_list = (
         data_meta[reduce(and_, (data_meta[k] == v for k, v in feature_dict.items()))][
             data_meta["size"].isin(data_size)
-        ]
+        ]['file_name']
         .tolist()
     )
+    # data_name_list = ['swat.csv', 'SMD.csv', 'SMAP.csv', 'MSL.csv', 'PSM.csv']
+    # data_name_list = ['exchange_rate.csv', 'ETTh1.csv', 'ETTh2.csv', 'ETTm1.csv', 'ETTm2.csv', 'national_illness.csv']
+    # data_name_list = ['metr-la.csv', 'pems-bay.csv', 'pems03.csv', 'pems04.csv', 'pems07.csv', 'pems08.csv']
+    print(data_name_list)
     return data_name_list
