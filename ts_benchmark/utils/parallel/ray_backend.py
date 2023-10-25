@@ -115,13 +115,18 @@ class RayActorPool:
     """
 
     def __init__(
-        self, n_workers: int, env: Dict, per_worker_resources: Optional[Dict] = None
+        self,
+        n_workers: int,
+        env: Dict,
+        per_worker_resources: Optional[Dict] = None,
+        max_tasks_per_child: Optional[int] = None,
     ):
         if per_worker_resources is None:
             per_worker_resources = {}
 
         self.env = env
         self.per_worker_resources = per_worker_resources
+        self.max_tasks_per_child = max_tasks_per_child
         self.actor_class = ray.remote(
             max_restarts=0,
             num_cpus=per_worker_resources.get("num_cpus", 1),
@@ -138,6 +143,7 @@ class RayActorPool:
         self._active_tasks = []
         self._idle_actors = list(range(len(self.actors)))
         self._restarting_actor_pool = {}
+        self._actor_tasks = [0] * len(self.actors)
 
         # message path between threads
         self._is_closed = False
@@ -175,7 +181,6 @@ class RayActorPool:
             task_info = self._task_info[task_id]
             try:
                 task_info.result.put(ray.get(task_obj))
-                self._idle_actors.append(task_info.actor_id)
             except RayActorError as e:
                 logger.info(
                     "task %d died unexpectedly on actor %d: %s",
@@ -185,6 +190,21 @@ class RayActorPool:
                 )
                 task_info.result.put(RuntimeError(f"task died unexpectedly: {e}"))
                 self._restart_actor(task_info.actor_id)
+                del self._task_info[task_id]
+                del self._ray_task_to_id[task_obj]
+                continue
+
+            self._actor_tasks[task_info.actor_id] += 1
+            if (
+                self.max_tasks_per_child is not None
+                and self._actor_tasks[task_info.actor_id] >= self.max_tasks_per_child
+            ):
+                logger.info(
+                    "max_tasks_per_child reached in actor %s, restarting", task_info.actor_id
+                )
+                self._restart_actor(task_info.actor_id)
+            else:
+                self._idle_actors.append(task_info.actor_id)
             del self._task_info[task_id]
             del self._ray_task_to_id[task_obj]
 
@@ -234,6 +254,7 @@ class RayActorPool:
         ray.kill(cur_actor, no_restart=True)
         del cur_actor
         self.actors[actor_id] = self._new_actor()
+        self._actor_tasks[actor_id] = 0
         self._restarting_actor_pool[actor_id] = time.time()
 
     def _check_restarting_actors(self):
@@ -296,6 +317,8 @@ class RayActorPool:
             return
         self._idle_event.clear()
         self._idle_event.wait()
+        while self._restarting_actor_pool:
+            time.sleep(1)
 
     def close(self) -> NoReturn:
         self._is_closed = True
@@ -310,10 +333,12 @@ class RayBackend:
         n_workers: Optional[int] = None,
         n_cpus: Optional[int] = None,
         gpu_devices: Optional[List[int]] = None,
+        max_tasks_per_child: Optional[int] = None,
     ):
         self.n_cpus = n_cpus if n_cpus is not None else os.cpu_count()
         self.n_workers = n_workers if n_workers is not None else self.n_cpus
         self.gpu_devices = gpu_devices if gpu_devices is not None else []
+        self.max_tasks_per_child = max_tasks_per_child
         self.pool = None
         self._storage = None
         self.initialized = False
@@ -348,6 +373,7 @@ class RayBackend:
                 "num_cpus": cpu_per_worker,
                 "num_gpus": gpu_per_worker,
             },
+            max_tasks_per_child=self.max_tasks_per_child,
         )
         self.initialized = True
 
@@ -417,7 +443,14 @@ def sync_data(storage):
 
 
 if __name__ == "__main__":
-    backend = RayBackend(3)
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s [%(levelname)s] %(name)s(%(lineno)d): %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    backend = RayBackend(3, max_tasks_per_child=1)
+    backend.init()
 
     def sleep_func(t):
         time.sleep(t)
