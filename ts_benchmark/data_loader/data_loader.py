@@ -59,8 +59,10 @@ def load_data(data_loader_config: dict) -> List[str]:
         ]['file_name']
         .tolist()
     )
+
     # data_name_list = ['swat.csv', 'SMD.csv', 'SMAP.csv', 'MSL.csv', 'PSM.csv']
     # data_name_list = ['exchange_rate.csv', 'ETTh1.csv', 'ETTh2.csv', 'ETTm1.csv', 'ETTm2.csv', 'national_illness.csv']
-    # data_name_list = ['metr-la.csv', 'pems-bay.csv', 'pems03.csv', 'pems04.csv', 'pems07.csv', 'pems08.csv']
+    # data_name_list = ['metr-la.csv', 'pems03.csv', 'pems04.csv', 'pems07.csv', 'pems08.csv']
+    data_name_list = ['rideshare_dataset_without_missing_values.csv']
     print(data_name_list)
     return data_name_list

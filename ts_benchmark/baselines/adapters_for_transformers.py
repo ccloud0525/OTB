@@ -27,7 +27,7 @@ DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "activation": "gelu",
     "output_attention": 0,
     "dropout": 0.1,
-    "lr": 0.001,
+    "lr": 0.0001,
     "num_epochs": 100,
     "task_name": "short_term_forecast",
     "p_hidden_dims": [128, 128],
@@ -50,10 +50,6 @@ class TransformerAdapter:
         self.config = TransformerConfig(**kwargs)
         self.model_name = model_name
         self.model_class = model_class
-        if self.model_name == "MICN":
-            setattr(self.config, "label_len", self.config.seq_len)
-        else:
-            setattr(self.config, "label_len", self.config.seq_len // 2)
 
     @staticmethod
     def required_hyper_params() -> dict:
@@ -70,14 +66,39 @@ class TransformerAdapter:
         """
         return self.model_name
 
+    def hyper_param_tune(self, train_data: pd.DataFrame):
+        freq = pd.infer_freq(train_data.index)
+        if freq == None:
+            raise ValueError("不规则的时间间隔")
+        elif freq[0].lower() not in ["m", "w", "t", "b", "d", "s"]:
+            self.config.freq = "s"
+        else:
+            self.config.freq = freq[0].lower()
+
+        column_num = train_data.shape[1]
+        self.config.enc_in = column_num
+        self.config.dec_in = column_num
+        self.config.c_out = column_num
+
+        if self.model_name == "MICN":
+            setattr(self.config, "label_len", self.config.seq_len)
+        else:
+            setattr(self.config, "label_len", self.config.seq_len // 2)
+
     def padding_data_for_forecast(self, test):
         time_column_data = test.index
+        data_colums = test.columns
         start = time_column_data[-1]
-        padding_zero = [0] * (self.config.pred_len + 1)
+        # padding_zero = [0] * (self.config.pred_len + 1)
         date = pd.date_range(
             start=start, periods=self.config.pred_len + 1, freq=self.config.freq.upper()
         )
-        df = pd.DataFrame({"date": date, "col_1": padding_zero})
+        df = pd.DataFrame(columns=data_colums)
+
+        df.iloc[: self.config.pred_len + 1, :] = 0
+
+        df["date"] = date
+        # df = pd.DataFrame({"date": date, "col_1": padding_zero})
         df = df.set_index("date")
         new_df = df.iloc[1:]
         test = pd.concat([test, new_df])
@@ -121,14 +142,7 @@ class TransformerAdapter:
 
         :param train_data: 用于训练的时间序列数据。
         """
-        freq = pd.infer_freq(train_data.index)
-        if freq == None:
-            raise ValueError("不规则的时间间隔")
-        elif freq[0].lower() not in ['m', 'w', 't', 'b', 'd', 's']:
-            self.config.freq = 's'
-        else:
-            self.config.freq = freq[0].lower()
-
+        self.hyper_param_tune(train_data)
         self.model = self.model_class(self.config)
 
         config = self.config
@@ -143,7 +157,7 @@ class TransformerAdapter:
             label_len=config.label_len,
             shuffle=False,
             timeenc=0,
-            freq=self.config.freq,
+            freq=config.freq,
         )
         # Create the data loader (dataloader)
         train_data_loader = DataloaderForTransformer(
@@ -154,7 +168,7 @@ class TransformerAdapter:
             label_len=config.label_len,
             shuffle=False,
             timeenc=0,
-            freq=self.config.freq,
+            freq=config.freq,
         )
 
         # Define the loss function and optimizer
@@ -224,7 +238,7 @@ class TransformerAdapter:
             label_len=config.label_len,
             shuffle=False,
             timeenc=0,
-            freq=self.config.freq,
+            freq=config.freq,
         )
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -252,7 +266,9 @@ class TransformerAdapter:
                     output = self.model(input, input_mark, dec_input, target_mark)
                     break
 
-                temp = output.cpu().numpy().flatten()[-config.pred_len :]
+                column_num = output.shape[-1]
+                temp = output.cpu().numpy().reshape(-1, column_num)[-config.pred_len :]
+
                 if answer is None:
                     answer = temp
                 else:
@@ -263,7 +279,8 @@ class TransformerAdapter:
 
                 output = output.cpu().numpy()[:, -config.pred_len :, :]
                 for i in range(config.pred_len):
-                    test["col_1"][i + config.seq_len] = output[0, i, :]
+                    test.iloc[i + config.seq_len] = output[0, i, :]
+
                 test = test.iloc[config.pred_len :]
                 test = self.padding_data_for_forecast(test)
                 test_data_loader = DataloaderForTransformer(

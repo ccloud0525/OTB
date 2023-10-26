@@ -224,14 +224,15 @@ class DataloaderForTransformer:
                     )
                     if self.freq != "b" and self.freq != "d":
                         df_stamp["hour"] = df_stamp.date.apply(lambda row: row.hour, 1)
-                        if self.freq != "t":
+                        if self.freq != "h":
                             df_stamp["minute"] = df_stamp.date.apply(
                                 lambda row: row.minute, 1
                             )
-                            if self.freq != "s":
+                            if self.freq != "t":
                                 df_stamp["second"] = df_stamp.date.apply(
-                                    lambda row: row.second, 1
+                                    lambda row: row.minute, 1
                                 )
+
             data_stamp = df_stamp.drop(["date"], axis=1).values
             # TODO：看一下时间戳更细时能不能提取更多数据
         elif self.timeenc == 1:
