@@ -15,6 +15,7 @@ from ts_benchmark.evaluation.strategy.constants import FieldNames
 from ts_benchmark.evaluation.strategy.strategy import Strategy
 from ts_benchmark.models.get_model import ModelFactory
 from ts_benchmark.utils.data_processing import split_before
+from ts_benchmark.utils.random_utils import fix_random_seed
 
 
 class RollingForecast(Strategy):
@@ -62,10 +63,13 @@ class RollingForecast(Strategy):
         :param model_factory: 模型对象的构造/工厂函数。
         :return: 评估结果的平均值。
         """
+        fix_random_seed()
+
         model = model_factory()
 
         data = DataPool().get_series(series_name)
-        self.data_lens = len(data)
+        self.data_lens = int(DataPool().get_series_meta_info(series_name)["length"].item())
+        # self.data_lens = len(data)
         try:
             all_test_results = []
 
@@ -79,11 +83,18 @@ class RollingForecast(Strategy):
                     "The length of training or testing data is less than or equal to 0"
                 )
             train_data, other = split_before(data, train_length)  # 分割训练数据
+            # self.scaler.fit(train_data.values)
+
+            train_data1, rest1 = split_before(train_data, int(train_length * 0.75))
+            self.scaler.fit(train_data1.values)
+
+            train_data_transformed = pd.DataFrame(self.scaler.transform(train_data.values), columns=train_data.columns, index=train_data.index)
+
             start_fit_time = time.time()
             if hasattr(model, "forecast_fit"):
-                model.forecast_fit(train_data)  # 在训练数据上拟合模型
+                model.forecast_fit(train_data_transformed)  # 在训练数据上拟合模型
             else:
-                model.fit(train_data)  # 在训练数据上拟合模型
+                model.fit(train_data_transformed)  # 在训练数据上拟合模型
             end_fit_time = time.time()
             index_list = self._get_index(test_length, train_length)  # 获取滚动窗口的索引列表
             total_inference_time = 0
@@ -93,11 +104,18 @@ class RollingForecast(Strategy):
                 index = index_list[i]
                 train, other = split_before(data, index)  # 分割训练数据
                 test, rest = split_before(other, self.pred_len)  # 分割测试数据
+                train_transformed = pd.DataFrame(self.scaler.transform(train.values), columns=train.columns, index=train.index)
                 start_inference_time = time.time()
-                predict = model.forecast(self.pred_len, train)  # 预测未来数据
+                predict = model.forecast(self.pred_len, train_transformed)  # 预测未来数据
                 end_inference_time = time.time()
+                print(predict)
+                # predict = self.scaler.inverse_transform(predict)
+                # end_inference_time = time.time()
+                # total_inference_time += end_inference_time - start_inference_time
+                # actual = test.to_numpy()
+
+                actual = pd.DataFrame(self.scaler.transform(test.values), columns=test.columns, index=test.index).to_numpy()
                 total_inference_time += end_inference_time - start_inference_time
-                actual = test.to_numpy()
 
                 single_series_result = self.evaluator.evaluate(  # 计算评价指标
                     actual, predict, train_data.values

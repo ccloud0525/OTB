@@ -4,7 +4,6 @@ import pickle
 import time
 import traceback
 from typing import Any, List
-
 import pandas as pd
 
 from ts_benchmark.data_loader.data_pool import DataPool
@@ -14,11 +13,12 @@ from ts_benchmark.evaluation.strategy.constants import FieldNames
 from ts_benchmark.evaluation.strategy.strategy import Strategy
 from ts_benchmark.models.get_model import ModelFactory
 from ts_benchmark.utils.data_processing import split_before
+from ts_benchmark.utils.random_utils import fix_random_seed
 
 
 class FixedForecast(Strategy):
     """
-      固定预测策略类，用于在时间序列数据上执行固定预测。
+    固定预测策略类，用于在时间序列数据上执行固定预测。
     """
 
     REQUIRED_FIELDS = ["pred_len"]
@@ -39,6 +39,7 @@ class FixedForecast(Strategy):
         :param model_factory: 模型对象的构造/工厂函数。
         :return: 评估结果。
         """
+        fix_random_seed()
         model = model_factory()
         data = DataPool().get_series(series_name)
         try:
@@ -46,13 +47,20 @@ class FixedForecast(Strategy):
             if train_length <= 0:
                 raise ValueError("The prediction step exceeds the data length")
             train, test = split_before(data, train_length)  # 分割训练和测试数据
+
+            self.scaler.fit(train.values)
+
+            train_data = pd.DataFrame(self.scaler.transform(train.values), columns=train.columns, index=train.index)
+
             start_fit_time = time.time()
             if hasattr(model, "forecast_fit"):
-                model.forecast_fit(train)  # 在训练数据上拟合模型
+                model.forecast_fit(train_data)  # 在训练数据上拟合模型
             else:
-                model.fit(train)  # 在训练数据上拟合模型
+                model.fit(train_data)  # 在训练数据上拟合模型
             end_fit_time = time.time()
-            predict = model.forecast(self.pred_len, train)  # 预测未来数据
+            predict = model.forecast(self.pred_len, train_data)  # 预测未来数据
+
+            predict = self.scaler.inverse_transform(predict)
             end_inference_time = time.time()
 
             actual = test.to_numpy()
@@ -66,9 +74,7 @@ class FixedForecast(Strategy):
             )
             actual_data_pickle = pickle.dumps(test)
             # 使用 base64 进行编码
-            actual_data_pickle = base64.b64encode(actual_data_pickle).decode(
-                "utf-8"
-            )
+            actual_data_pickle = base64.b64encode(actual_data_pickle).decode("utf-8")
 
             inference_data_pickle = pickle.dumps(inference_data)
             # 使用 base64 进行编码
@@ -87,7 +93,9 @@ class FixedForecast(Strategy):
 
         except Exception as e:
             log = f"{traceback.format_exc()}\n{e}"
-            single_series_results = self.get_default_result(**{FieldNames.LOG_INFO: log})
+            single_series_results = self.get_default_result(
+                **{FieldNames.LOG_INFO: log}
+            )
 
         return single_series_results
 

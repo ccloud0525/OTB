@@ -46,6 +46,9 @@ def report(report_config: dict) -> None:
         report_config.get("null_value_threshold", 0.3),
     )
 
+    num_rows = leaderboard_df.shape[0]
+    leaderboard_df.insert(0, 'strategy_args', [log_data.iloc[0, 1]] * num_rows)
+
     # Create final DataFrame and save to CSV
     leaderboard_df.to_csv(
         os.path.join(ROOT_PATH, "result", report_config["leaderboard_file_name"]),

@@ -63,6 +63,12 @@ class DataPool(metaclass=Singleton):
 
         :param list_of_files: 要加载的数据文件列表。
         """
+        self._forecast_data_meta = pd.read_csv(META_FORECAST_DATA_PATH)
+        self._forecast_data_meta.set_index(self._DATA_KEY, drop=False, inplace=True)
+
+        self._detect_data_meta = pd.read_csv(META_DETECTION_DATA_PATH)
+        self._detect_data_meta.set_index(self._DATA_KEY, drop=False, inplace=True)
+
         with ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(self._load_data, series_name)

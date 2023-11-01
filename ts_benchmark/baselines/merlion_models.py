@@ -174,8 +174,8 @@ MERLION_MODELS = [
 ]
 
 MERLION_STAT_MODELS = [  # 训练集不需要标签
-    (ArimaDetector, ArimaDetectorConfig, {}),
-    (ETSDetector, ETSDetectorConfig, {}),
+    (ArimaDetector, ArimaDetectorConfig, {"max_forecast_steps": "max_forecast_steps"}),
+    (ETSDetector, ETSDetectorConfig, {"max_forecast_steps": "max_forecast_steps"}),
     (MSESDetector, MSESDetectorConfig, {"max_forecast_steps": "max_forecast_steps"}),
 ]
 

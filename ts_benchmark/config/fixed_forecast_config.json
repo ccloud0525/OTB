@@ -13,7 +13,7 @@
         ],
         "recommend_model_hyper_params": {
             "input_chunk_length":7,
-            "output_chunk_length": 1
+            "output_chunk_length": 7
         }
     },
 
@@ -21,14 +21,14 @@
         "metric_name": "all",
         "strategy_args": {
             "strategy_name": "fixed_forecast",
-            "pred_len": 48
+            "pred_len": 7
         }
     },
 
 
     "report_config" : {
         "aggregate_type": "mean",
-        "report_metrics": ["mae", "mse", "smape", "mape","rmse"],
+        "report_metrics": ["mae", "mse", "rmse", "mape", "smape", "mase"],
         "fill_type": "mean_value",
         "null_value_threshold": "0.3"
     }

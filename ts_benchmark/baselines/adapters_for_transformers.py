@@ -1,34 +1,41 @@
 import torch
 import torch.nn as nn
-from .time_series_library.utils.tools import EarlyStopping
+from .time_series_library.utils.tools import EarlyStopping, adjust_learning_rate
 from ts_benchmark.utils.data_processing import split_before
 from typing import Type, Dict
 from torch import optim
-
 import numpy as np
 import pandas as pd
-from ts_benchmark.baselines.utils import DataloaderForTransformer
+from ts_benchmark.baselines.utils import data_provider
 
 DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
-    "top_k": 1,
+    "top_k": 5,
     "enc_in": 1,
     "dec_in": 1,
     "c_out": 1,
     "e_layers": 2,
-    "d_layers": 2,
-    "d_model": 32,
-    "d_ff": 32,
+    "d_layers": 1,
+    "d_model": 512,
+    "d_ff": 2048,
     "embed": "timeF",
     "freq": "h",
+    "lradj": "type1",
     "moving_avg": 25,
     "num_kernels": 6,
-    "factor": 3,
+    "factor": 1,
     "n_heads": 8,
     "activation": "gelu",
     "output_attention": 0,
+    "patch_len": 16,
+    "stride": 8,
     "dropout": 0.1,
-    "lr": 0.001,
-    "num_epochs": 100,
+    "batch_size": 32,
+    "lr": 0.0001,
+    "num_epochs": 10,
+    "num_workers": 10,
+    "loss": "MSE",
+    "itr": 1,
+    "patience": 3,
     "task_name": "short_term_forecast",
     "p_hidden_dims": [128, 128],
     "p_hidden_layers": 2,
@@ -50,10 +57,6 @@ class TransformerAdapter:
         self.config = TransformerConfig(**kwargs)
         self.model_name = model_name
         self.model_class = model_class
-        if self.model_name == "MICN":
-            setattr(self.config, "label_len", self.config.seq_len)
-        else:
-            setattr(self.config, "label_len", self.config.seq_len // 2)
 
     @staticmethod
     def required_hyper_params() -> dict:
@@ -70,14 +73,39 @@ class TransformerAdapter:
         """
         return self.model_name
 
+    def hyper_param_tune(self, train_data: pd.DataFrame):
+        freq = pd.infer_freq(train_data.index)
+        if freq == None:
+            raise ValueError("不规则的时间间隔")
+        elif freq[0].lower() not in ["m", "w", "b", "d", "h", "t", "s"]:
+            self.config.freq = "s"
+        else:
+            self.config.freq = freq[0].lower()
+
+        column_num = train_data.shape[1]
+        self.config.enc_in = column_num
+        self.config.dec_in = column_num
+        self.config.c_out = column_num
+
+        if self.model_name == "MICN":
+            setattr(self.config, "label_len", self.config.seq_len)
+        else:
+            setattr(self.config, "label_len", self.config.seq_len // 2)
+
     def padding_data_for_forecast(self, test):
         time_column_data = test.index
+        data_colums = test.columns
         start = time_column_data[-1]
-        padding_zero = [0] * (self.config.pred_len + 1)
+        # padding_zero = [0] * (self.config.pred_len + 1)
         date = pd.date_range(
             start=start, periods=self.config.pred_len + 1, freq=self.config.freq.upper()
         )
-        df = pd.DataFrame({"date": date, "col_1": padding_zero})
+        df = pd.DataFrame(columns=data_colums)
+
+        df.iloc[: self.config.pred_len + 1, :] = 0
+
+        df["date"] = date
+        # df = pd.DataFrame({"date": date, "col_1": padding_zero})
         df = df.set_index("date")
         new_df = df.iloc[1:]
         test = pd.concat([test, new_df])
@@ -121,52 +149,56 @@ class TransformerAdapter:
 
         :param train_data: 用于训练的时间序列数据。
         """
-        freq = pd.infer_freq(train_data.index)
-        if freq == None:
-            raise ValueError("不规则的时间间隔")
-        else:
-            self.config.freq = freq[0].lower()
-
+        self.hyper_param_tune(train_data)
         self.model = self.model_class(self.config)
-
         config = self.config
-        border = int((train_data.shape[0]) * 0.8)
+        border = int((train_data.shape[0]) * 0.75)
 
-        train_data, valid_data = split_before(train_data, border)
-        valid_data_loader = DataloaderForTransformer(
-            dataset=valid_data,
-            batch_size=64,
-            history_len=config.seq_len,
-            prediction_len=config.pred_len,
-            label_len=config.label_len,
-            shuffle=False,
-            timeenc=0,
-            freq=self.config.freq,
+        train_data_value, valid_data_rest = split_before(train_data, border)
+        train_data_rest, valid_data = split_before(train_data, border - config.seq_len)
+
+        valid_dataset, valid_data_loader = data_provider(
+            valid_data,
+            config,
+            timeenc=1,
+            batch_size=config.batch_size,
+            shuffle=True,
+            drop_last=True,
         )
-        # Create the data loader (dataloader)
-        train_data_loader = DataloaderForTransformer(
-            dataset=train_data,
-            batch_size=64,
-            history_len=config.seq_len,
-            prediction_len=config.pred_len,
-            label_len=config.label_len,
-            shuffle=False,
-            timeenc=0,
-            freq=self.config.freq,
+
+        train_dataset, train_data_loader = data_provider(
+            train_data_value,
+            config,
+            timeenc=1,
+            batch_size=config.batch_size,
+            shuffle=True,
+            drop_last=True,
         )
 
         # Define the loss function and optimizer
         criterion = nn.MSELoss()
+        # criterion = nn.L1Loss()
         optimizer = optim.Adam(self.model.parameters(), lr=config.lr)
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        early_stopping = EarlyStopping()
+        early_stopping = EarlyStopping(patience=config.patience)
         self.model.to(device)
+        # 计算可学习参数的总数
+        total_params = sum(
+            p.numel() for p in self.model.parameters() if p.requires_grad
+        )
+
+        print(f"Total trainable parameters: {total_params}")
+
+        # print(self.model.state_dict())
 
         for epoch in range(config.num_epochs):
             self.model.train()
-            for input, target, input_mark, target_mark in train_data_loader:
+            # for input, target, input_mark, target_mark in train_data_loader:
+            for i, (input, target, input_mark, target_mark) in enumerate(
+                train_data_loader
+            ):
                 optimizer.zero_grad()
                 input, target, input_mark, target_mark = (
                     input.to(device),
@@ -196,6 +228,8 @@ class TransformerAdapter:
                 self.model.load_state_dict(early_stopping.check_point)
                 break
 
+            adjust_learning_rate(optimizer, epoch + 1, config)
+
     def forecast(self, pred_len: int, train: pd.DataFrame) -> np.ndarray:
         """
         进行预测。
@@ -213,15 +247,8 @@ class TransformerAdapter:
         # 生成transformer类方法需要的额外时间戳mark
         test = self.padding_data_for_forecast(test)
 
-        test_data_loader = DataloaderForTransformer(
-            dataset=test,
-            batch_size=1,
-            history_len=config.seq_len,
-            prediction_len=config.pred_len,
-            label_len=config.label_len,
-            shuffle=False,
-            timeenc=0,
-            freq=self.config.freq,
+        test_data_set, test_data_loader = data_provider(
+            test, config, timeenc=1, batch_size=1, shuffle=False, drop_last=False
         )
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -247,9 +274,10 @@ class TransformerAdapter:
                         .to(device)
                     )
                     output = self.model(input, input_mark, dec_input, target_mark)
-                    break
 
-                temp = output.cpu().numpy().flatten()[-config.pred_len :]
+                column_num = output.shape[-1]
+                temp = output.cpu().numpy().reshape(-1, column_num)[-config.pred_len :]
+
                 if answer is None:
                     answer = temp
                 else:
@@ -260,18 +288,18 @@ class TransformerAdapter:
 
                 output = output.cpu().numpy()[:, -config.pred_len :, :]
                 for i in range(config.pred_len):
-                    test["col_1"][i + config.seq_len] = output[0, i, :]
+                    test.iloc[i + config.seq_len] = output[0, i, :]
+
                 test = test.iloc[config.pred_len :]
                 test = self.padding_data_for_forecast(test)
-                test_data_loader = DataloaderForTransformer(
-                    dataset=test,
+
+                test_data_set, test_data_loader = data_provider(
+                    test,
+                    config,
+                    timeenc=1,
                     batch_size=1,
-                    history_len=config.seq_len,
-                    prediction_len=config.pred_len,
-                    label_len=config.label_len,
                     shuffle=False,
-                    timeenc=0,
-                    freq=config.freq,
+                    drop_last=False,
                 )
 
 

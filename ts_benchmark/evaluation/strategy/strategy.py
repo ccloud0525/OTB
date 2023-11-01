@@ -4,6 +4,7 @@ import json
 import logging
 from functools import cached_property
 from typing import Any, NoReturn, List, Dict
+from sklearn.preprocessing import StandardScaler
 
 import numpy as np
 
@@ -14,22 +15,22 @@ from ts_benchmark.models.get_model import ModelFactory
 class ResultCollector:
     """
     测试结果收集工具
-    
+
     用于帮助 strategy 自定义结果返回方式
     """
-    
+
     def __init__(self):
         self.results = []
-        
+
     def add(self, result: Any) -> NoReturn:
         self.results.append(result)
-        
+
     def collect(self) -> List:
         return self.results
-    
+
     def reset(self) -> NoReturn:
         self.results = []
-    
+
     def get_size(self) -> int:
         """
         返回当前已收集的测试结果数量
@@ -53,6 +54,7 @@ class Strategy(metaclass=abc.ABCMeta):
         """
         self.strategy_config = strategy_config
         self.evaluator = evaluator
+        self.scaler = StandardScaler()
 
     @abc.abstractmethod
     def execute(self, series_name: str, model_factory: ModelFactory) -> Any:
@@ -77,7 +79,9 @@ class Strategy(metaclass=abc.ABCMeta):
             ]
             extra_args = [arg for arg in provided_args if arg not in required_args]
             config_args = {
-                arg: self.strategy_config[arg] for arg in provided_args if arg in required_args
+                arg: self.strategy_config[arg]
+                for arg in provided_args
+                if arg in required_args
             }
 
             if missing_args:

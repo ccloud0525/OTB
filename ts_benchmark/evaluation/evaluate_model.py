@@ -73,7 +73,6 @@ def eval_model(
     strategy = strategy_class(model_eval_config["strategy_args"], evaluator)  # 创建评估策略对象
 
     eval_backend = ParallelBackend()
-
     result_list = []
     for series_name in tqdm.tqdm(series_list, desc="scheduling..."):
         # TODO: refactor data model to optimize communication cost in parallel mode

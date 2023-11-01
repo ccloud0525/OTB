@@ -162,7 +162,7 @@ class RayActorPool:
             1000
             if sys.platform == "win32"
             and self.per_worker_resources.get("num_gpus", 0) > 0
-            else 2
+            else 1000
         )
         return self.actor_class.options(max_concurrency=max_concurrency).remote(
             self.env

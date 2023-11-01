@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from math import sqrt
-from ts_benchmark.baselines.time_series_library.utils.masking import TriangularCausalMask, ProbMask
+from ts_benchmark.baselines.time_series_library1.utils.masking import TriangularCausalMask, ProbMask
 from reformer_pytorch import LSHSelfAttention
 from einops import rearrange, repeat
 
@@ -40,9 +40,9 @@ class DSAttention(nn.Module):
         V = torch.einsum("bhls,bshd->blhd", A, values)
 
         if self.output_attention:
-            return (V.contiguous(), A)
+            return V.contiguous(), A
         else:
-            return (V.contiguous(), None)
+            return V.contiguous(), None
 
 
 class FullAttention(nn.Module):
@@ -70,9 +70,9 @@ class FullAttention(nn.Module):
         V = torch.einsum("bhls,bshd->blhd", A, values)
 
         if self.output_attention:
-            return (V.contiguous(), A)
+            return V.contiguous(), A
         else:
-            return (V.contiguous(), None)
+            return V.contiguous(), None
 
 
 class ProbAttention(nn.Module):
@@ -140,9 +140,9 @@ class ProbAttention(nn.Module):
                      L_V).type_as(attn).to(attn.device)
             attns[torch.arange(B)[:, None, None], torch.arange(H)[
                                                   None, :, None], index, :] = attn
-            return (context_in, attns)
+            return context_in, attns
         else:
-            return (context_in, None)
+            return context_in, None
 
     def forward(self, queries, keys, values, attn_mask, tau=None, delta=None):
         B, L_Q, H, D = queries.shape

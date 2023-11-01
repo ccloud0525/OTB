@@ -27,6 +27,11 @@ def load_data(data_loader_config: dict) -> List[str]:
     :raises RuntimeError: 如果 feature_dict 为 None。
     """
     feature_dict = data_loader_config.get("feature_dict", None)
+
+    typical_data_name_list = data_loader_config.get("typical_data_name_list", None)
+    if typical_data_name_list is not None:
+        return typical_data_name_list
+
     if feature_dict is None:
         raise RuntimeError("feature_dict is None")
 
@@ -56,8 +61,8 @@ def load_data(data_loader_config: dict) -> List[str]:
     data_name_list = (
         data_meta[reduce(and_, (data_meta[k] == v for k, v in feature_dict.items()))][
             data_meta["size"].isin(data_size)
-        ]
-        .iloc[:, 0]
+        ]['file_name']
         .tolist()
     )
+
     return data_name_list

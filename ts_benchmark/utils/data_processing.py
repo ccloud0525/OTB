@@ -69,7 +69,7 @@ import pandas as pd
 #
 #     return df
 
-def read_data(path: str) -> pd.DataFrame:
+def read_data(path: str, nrows=None) -> pd.DataFrame:
     """
     读取数据文件并返回 DataFrame。
 
@@ -83,6 +83,7 @@ def read_data(path: str) -> pd.DataFrame:
     label_exists = "label" in data["cols"].values
 
     all_points = data.shape[0]
+
     columns = data.columns
 
     if columns[0] == "date":
@@ -104,8 +105,10 @@ def read_data(path: str) -> pd.DataFrame:
             for j in range(n_cols)
         }
         df = pd.concat([df, pd.DataFrame(col_data)], axis=1)
-        if not np.issubdtype(df["date"], np.integer):
-            df["date"] = pd.to_datetime(df["date"])
+        # if np.issubdtype(df["date"], np.integer):
+        #     df["date"] = pd.to_datetime(df["date"], unit='m', origin=pd.Timestamp("1970-01-01 00:00:00"))
+        # else:
+        df["date"] = pd.to_datetime(df["date"])
         df.set_index("date", inplace=True)
 
     elif columns[0] != "date" and not is_univariate:
@@ -118,8 +121,10 @@ def read_data(path: str) -> pd.DataFrame:
     elif columns[0] == "date" and is_univariate:
         df["date"] = data.iloc[:, 0]
         df[cols_name[0]] = data.iloc[:, 1]
-        if not np.issubdtype(df["date"], np.integer):
-            df["date"] = pd.to_datetime(df["date"])
+        # if np.issubdtype(df["date"], np.integer):
+        #     df["date"] = pd.to_datetime(df["date"], unit='m', origin=pd.Timestamp("1970-01-01 00:00:00"))
+        # else:
+        df["date"] = pd.to_datetime(df["date"])
         df.set_index("date", inplace=True)
 
     else:
@@ -130,6 +135,9 @@ def read_data(path: str) -> pd.DataFrame:
         last_col_name = df.columns[-1]
         # 重新命名最后一列为 "label"
         df.rename(columns={last_col_name: "label"}, inplace=True)
+
+    if nrows is not None and isinstance(nrows, int) and df.shape[0] >= nrows:
+        df = df.iloc[:nrows, :]
 
     return df
 

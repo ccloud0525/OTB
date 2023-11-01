@@ -11,6 +11,8 @@ import time
 
 import warnings
 
+from ts_benchmark.utils.data_processing import read_data
+
 warnings.filterwarnings("ignore")
 
 
@@ -202,30 +204,37 @@ def feature_extract(path):
     ]
     result_frame = pd.DataFrame(columns=index_columns)
 
-    file_name = path.split("\\")[-1]
+    file_name = path.split("/")[-1]
     file_name = [file_name]
 
-    original_df = pd.read_csv(path, header=None)
-    limited_length_df = pd.read_csv(path, header=None, nrows=10000)
+    # original_df = pd.read_csv(path, header=None)
+    # limited_length_df = pd.read_csv(path, header=None, nrows=10000)
+
+    original_df = read_data(path)
+    limited_length_df = read_data(path, nrows=10000)
+
 
     series_length = [original_df.shape[0]]
     try:
         # ADF Test 原假设是非平稳， P值小于0.05时序列是平稳的， P值越小越平稳。如果p_value值比0.05小，证明有单位根，也就是说序列平稳。如果p_value比0.05大则证明非平稳。
-        ADF_P_value = adfuller(limited_length_df[0].values, autolag="AIC")[1]
+        # ADF_P_value = adfuller(limited_length_df.iloc[:, 0].values, autolag="AIC")[1]
+        ADF_P_value = [adfuller(limited_length_df.iloc[:, 0].values + 1e-10, autolag="AIC")[1]]
 
         # KPSS Test 原假设是平稳的， P值小于0.05则序列是非平稳的， P值越大越平稳
-        KPSS_P_value = kpss(limited_length_df[0].values, regression="c")[1]
+        KPSS_P_value = [kpss(limited_length_df.iloc[:, 0].values, regression="c")[1]]
 
-        stability = [ADF_P_value <= 0.05 or KPSS_P_value >= 0.05]
+        stability = [ADF_P_value[0] <= 0.05 or KPSS_P_value[0] >= 0.05]
 
     except:
         ADF_P_value = [None]
         KPSS_P_value = [None]
         stability = [None]
 
-    series_value = limited_length_df[0]
+    series_value = limited_length_df.iloc[:, 0]
+    origin_series_value = original_df.iloc[:, 0]
     series_value = pd.Series(series_value).astype("float")
-    other_features = extract_other_features(series_value)
+    origin_series_value = pd.Series(origin_series_value).astype("float")
+    other_features = extract_other_features(origin_series_value)
     periods, amplitude = fftTransfer(series_value, fmin=0.015)  # 快速傅里叶变换
 
     periods_list = []
@@ -250,15 +259,15 @@ def feature_extract(path):
         period_value = adjust_period(final_periods[i])
 
         if period_value < yuzhi:
-            res = STL(limited_length_df[0], period=period_value).fit()
+            res = STL(limited_length_df.iloc[:, 0], period=period_value).fit()
             limited_length_df["trend"] = res.trend
             limited_length_df["seasonal"] = res.seasonal
             limited_length_df["resid"] = res.resid
             limited_length_df["detrend"] = (
-                limited_length_df[0] - limited_length_df.trend
+                limited_length_df.iloc[:, 0] - limited_length_df.trend
             )
             limited_length_df["deseasonal"] = (
-                limited_length_df[0] - limited_length_df.seasonal
+                limited_length_df.iloc[:, 0] - limited_length_df.seasonal
             )
             trend_strength = max(
                 0,
@@ -290,24 +299,24 @@ def feature_extract(path):
 
     if_seasonal = [max_seasonal_strength >= 0.9]
     if_trend = [max_trend_strength >= 0.85]
-
     result_list = (
         file_name
         + series_length
         + result_list
         + if_seasonal
         + if_trend
-        + [ADF_P_value]
-        + [KPSS_P_value]
+        + ADF_P_value
+        + KPSS_P_value
         + stability
         + other_features
     )
 
     result_frame.loc[len(result_frame.index)] = result_list
+    print(result_list)
     return result_frame
 
 
-dir_path = os.path.join(r"C:\Users\86188\Desktop\160特征处理\单变量预测160")
+dir_path = os.path.join(r"/Users/xiangfeiqiu/D/datasets/processed_data/forecast_univariate/Libra/transformational_Libra/nature")
 file_paths_list = []
 for filename in os.listdir(dir_path):
     path = os.path.join(dir_path, filename)
@@ -319,10 +328,11 @@ start_time = time.time()
 with concurrent.futures.ThreadPoolExecutor() as executor:
     futures = [executor.submit(feature_extract, path) for path in file_paths_list]
 
-    # 从Future对象列表中获取已完成的特征提取结果
-    completed_results = [
-        future.result() for future in concurrent.futures.as_completed(futures)
-    ]
+# 使用wait函数等待所有任务完成
+concurrent.futures.wait(futures)
+
+# 获取已完成的任务结果
+completed_results = [future.result() for future in futures]
 
 # 将所有特征提取结果合并
 combined_features = pd.concat(completed_results, ignore_index=True)
@@ -332,23 +342,28 @@ end_time = time.time()
 execution_time = end_time - start_time
 print(f"执行时间为: {execution_time} 秒")
 
-combined_features.to_csv(r"C:\Users\86188\Desktop\160特征处理\self_feature.csv", index=False)
 # 显示合并后的特征
 print(combined_features)
+combined_features.to_csv("/Users/xiangfeiqiu/D/datasets/processed_data/forecast_univariate/Libra/transformational_Libra/nature.csv", index=False)
 
-# 使用多线程并行处理文件
+
+# # 使用多线程并行处理文件
 # with concurrent.futures.ThreadPoolExecutor() as executor:
 #     futures = [executor.submit(feature_extract, path) for path in file_paths_list]
 #
-# # 使用wait函数等待所有任务完成
-# concurrent.futures.wait(futures)
-#
-# # 获取已完成的任务结果
-# completed_results = [future.result() for future in futures]
+#     # 从Future对象列表中获取已完成的特征提取结果
+#     completed_results = [
+#         future.result() for future in concurrent.futures.as_completed(futures)
+#     ]
 #
 # # 将所有特征提取结果合并
 # combined_features = pd.concat(completed_results, ignore_index=True)
+# end_time = time.time()
 #
+# # 计算执行时间
+# execution_time = end_time - start_time
+# print(f"执行时间为: {execution_time} 秒")
+#
+# combined_features.to_csv(r"/Users/xiangfeiqiu/D/datasets/monash/test.csv", index=False)
 # # 显示合并后的特征
 # print(combined_features)
-# combined_features.to_csv(r"C:\Users\86188\Desktop\单变量160\test2.csv", index=False)

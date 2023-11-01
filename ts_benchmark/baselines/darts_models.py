@@ -37,6 +37,8 @@ from darts.models import (
     VARIMA,
 )
 
+from ts_benchmark.utils.data_processing import split_before
+
 if darts.__version__ >= "0.25.0":
     from darts.models.utils import NotImportedModule
 
@@ -105,8 +107,21 @@ class DartsModelAdapter:
 
         self.model = self.model_class(**self.model_args)
         series = TimeSeries.from_dataframe(series)
+        border = int((series.shape[0]) * 0.75)
 
-        return self.model.fit(series)
+        train_data, valid_data = split_before(series, border)
+        self.model = self.model_class(**self.model_args)
+        train_data = TimeSeries.from_dataframe(train_data)
+        valid_data = TimeSeries.from_dataframe(valid_data)
+
+        return self.model.fit(train_data, val_series = valid_data)
+
+
+
+        # self.model = self.model_class(**self.model_args)
+        # series = TimeSeries.from_dataframe(series)
+        #
+        # return self.model.fit(series)
 
     def forecast(self, pred_len: int, train: pd.DataFrame) -> np.ndarray:
         """
@@ -195,12 +210,15 @@ DARTS_MODELS = [
     (DLinearModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, DARTS_DEEP_MODEL_ARGS),
     (NBEATSModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, DARTS_DEEP_MODEL_ARGS),
     (NLinearModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, DARTS_DEEP_MODEL_ARGS),
-    (RandomForest, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
+    # (RandomForest, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
+    (RandomForest, DARTS_DEEP_MODEL_REQUIRED_ARGS2, {}),
     (XGBModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
     (CatBoostModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
-    (LightGBMModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
+    # (LightGBMModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
+    (LightGBMModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, {}),
     (LinearRegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
-    (RegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
+    (RegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, {}),
+    # (RegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
 ]
 
 # 以下模型特别允许推理时重新训练

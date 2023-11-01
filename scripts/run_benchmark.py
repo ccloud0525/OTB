@@ -10,11 +10,12 @@ import warnings
 import numpy as np
 import torch
 
+
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "../ts_benchmark/baselines/third_party")
 )
-
+from ts_benchmark.utils.get_file_name import get_log_file_name
 from ts_benchmark.report import report_dash, report_csv
 from ts_benchmark.common.constant import CONFIG_PATH
 from ts_benchmark.pipeline import pipeline
@@ -32,7 +33,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config-path",
         type=str,
-        # default="fixed_forecast_config.json",
+        default="rolling_forecast_config.json",
         required=True,
         choices=[
             "fixed_forecast_config.json",
@@ -41,6 +42,8 @@ if __name__ == "__main__":
             "fixed_detect_label_config.json",
             "unfixed_detect_score_config.json",
             "unfixed_detect_label_config.json",
+            "all_detect_score_config.json",
+            "all_detect_label_config.json",
         ],
         help="evaluation config file path",
     )
@@ -48,7 +51,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data-set-name",
         type=str,
-        # default="small_forecast",
+        default="small_forecast",
         required=True,
         choices=[
             "large_forecast",
@@ -61,12 +64,22 @@ if __name__ == "__main__":
         help="dataset name",
     )
 
+    parser.add_argument(
+        "--typical-data-name-list",
+        type=str,
+        nargs="+",
+        # default=None,
+        default="ETTh1.csv",
+        help="typical_data_name_list",
+    )
+
     # model_config
     parser.add_argument(
         "--adapter",
         type=str,
         nargs="+",
-        default=None,
+        # default=None,
+        default="transformer_adapter",
         help="Adapters for converting models",
     )
 
@@ -75,6 +88,7 @@ if __name__ == "__main__":
         type=str,
         nargs="+",
         required=True,
+        default="tslibrary.FEDformer.FEDformer",
         help="model path to evaluate",
     )
     parser.add_argument(
@@ -122,20 +136,23 @@ if __name__ == "__main__":
         "--gpus",
         type=int,
         nargs="+",
-        default=None,
+        # default=None,
+        default=7,
         help="list of gpu devices to use, only available in certain backends",
     )
     parser.add_argument(
         "--num-workers",
         type=int,
-        default=os.cpu_count(),
+        # default=os.cpu_count(),
+        default=1,
         help="number of evaluation workers",
     )
     # TODO: should timeout be part of the configuration file?
     parser.add_argument(
         "--timeout",
         type=float,
-        default=600,
+        # default=600,
+        default=6000,
         help="time limit for each evaluation task, in seconds",
     )
 
@@ -157,14 +174,6 @@ if __name__ == "__main__":
         help="Presentation form of algorithm performance comparison results",
     )
 
-    # Set random seeds
-    parser.add_argument(
-        "--random-seed",
-        type=int,
-        default=None,
-        help="Whether to set random seeds",
-    )
-
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -173,12 +182,6 @@ if __name__ == "__main__":
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    if args.random_seed is not None:
-        fix_seed = args.random_seed
-        random.seed(fix_seed)
-        torch.manual_seed(fix_seed)
-        np.random.seed(fix_seed)
-    #TODO：这里random seed不能影响ray actor内部的种子
 
     with open(os.path.join(CONFIG_PATH, args.config_path), "r") as file:
         config_data = json.load(file)
@@ -196,8 +199,17 @@ if __name__ == "__main__":
 
     data_loader_config = config_data["data_loader_config"]
     data_loader_config["data_set_name"] = args.data_set_name
+    data_loader_config["typical_data_name_list"] = args.typical_data_name_list
 
     model_config = config_data.get("model_config", None)
+
+    if args.adapter is not None:
+        if len(args.model_name) > len(args.adapter):
+            args.adapter.extend([None] * (len(args.model_name) - len(args.adapter)))
+
+    if args.model_hyper_params is not None:
+        if len(args.model_name) > len(args.model_hyper_params):
+            args.model_hyper_params.extend([None] * (len(args.model_name) - len(args.model_hyper_params)))
 
     args.adapter = (
         [None if item == "None" else item for item in args.adapter]
@@ -254,5 +266,9 @@ if __name__ == "__main__":
     if args.report_method == "dash":
         report_dash.report(report_config)
     elif args.report_method == "csv":
-        report_config["leaderboard_file_name"] = "test_report.csv"
+        # report_config["leaderboard_file_name"] = "test_report.csv"
+        filename = get_log_file_name()
+        leaderboard_file_name = "test_report" + filename
+        # report_config["leaderboard_file_name"] = "test_report.csv"
+        report_config["leaderboard_file_name"] = leaderboard_file_name
         report_csv.report(report_config)
