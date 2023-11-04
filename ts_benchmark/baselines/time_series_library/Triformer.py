@@ -47,6 +47,7 @@ class Triformer(nn.Module):
             self.layers.append(
                 Layer(
                     input_dim=self.channels,
+                    num_heads=configs.n_heads,
                     num_nodes=self.num_nodes,
                     cuts=cuts,
                     cut_size=patch_size,
@@ -73,7 +74,6 @@ class Triformer(nn.Module):
     def forward(self, batch_x, batch_x_mark, dec_inp, batch_y_mark):
         if self.notprinted:
             self.notprinted = False
-            print(batch_x.shape)
         x = self.start_fc(batch_x.unsqueeze(-1))
         batch_size = x.size(0)
         skip = 0
@@ -89,7 +89,7 @@ class Triformer(nn.Module):
 
 
 class Layer(nn.Module):
-    def __init__(self, input_dim, num_nodes, cuts, cut_size, factorized):
+    def __init__(self, input_dim, num_heads, num_nodes, cuts, cut_size, factorized):
         super(Layer, self).__init__()
         self.input_dim = input_dim
         self.num_nodes = num_nodes
@@ -122,7 +122,9 @@ class Layer(nn.Module):
             ]
         )
 
-        self.temporal_att = TemporalAttention(input_dim, factorized=factorized)
+        self.temporal_att = TemporalAttention(
+            input_dim, num_heads, factorized=factorized
+        )
         self.weights_generator_distinct = WeightGenerator(
             input_dim,
             input_dim,
@@ -196,9 +198,9 @@ class CustomLinear(nn.Module):
 
 
 class TemporalAttention(nn.Module):
-    def __init__(self, in_dim, factorized):
+    def __init__(self, in_dim, num_heads, factorized):
         super(TemporalAttention, self).__init__()
-        self.K = 8
+        self.K = num_heads
 
         if in_dim % self.K != 0:
             raise Exception(
