@@ -42,6 +42,7 @@ DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "task_name": "short_term_forecast",
     "p_hidden_dims": [128, 128],
     "p_hidden_layers": 2,
+    "mem_dim": 32,
 }
 
 
@@ -155,16 +156,27 @@ class TransformerAdapter:
         """
         self.hyper_param_tune(train_data)
         self.model = self.model_class(self.config)
-        print("----------------------------------------------------------", self.model_name)
+        print(
+            "----------------------------------------------------------",
+            self.model_name,
+        )
         config = self.config
 
-        train_data_value, valid_data = train_val_split(train_data, ratio, config.seq_len)
+        train_data_value, valid_data = train_val_split(
+            train_data, ratio, config.seq_len
+        )
         self.scaler.fit(train_data_value.values)
 
-        train_data_value = pd.DataFrame(self.scaler.transform(train_data_value.values), columns=train_data_value.columns,
-                                              index=train_data_value.index)
-        valid_data = pd.DataFrame(self.scaler.transform(valid_data.values), columns=valid_data.columns,
-                                              index=valid_data.index)
+        train_data_value = pd.DataFrame(
+            self.scaler.transform(train_data_value.values),
+            columns=train_data_value.columns,
+            index=train_data_value.index,
+        )
+        valid_data = pd.DataFrame(
+            self.scaler.transform(valid_data.values),
+            columns=valid_data.columns,
+            index=valid_data.index,
+        )
 
         valid_dataset, valid_data_loader = data_provider(
             valid_data,
@@ -247,8 +259,11 @@ class TransformerAdapter:
         :param testdata: 用于预测的时间序列数据。
         :return: 预测结果的数组。
         """
-        train = pd.DataFrame(self.scaler.transform(train.values), columns=train.columns,
-                                              index=train.index)
+        train = pd.DataFrame(
+            self.scaler.transform(train.values),
+            columns=train.columns,
+            index=train.index,
+        )
 
         if self.model is None:
             raise ValueError("Model not trained. Call the fit() function first.")
@@ -258,8 +273,6 @@ class TransformerAdapter:
 
         # 生成transformer类方法需要的额外时间戳mark
         test = self.padding_data_for_forecast(test)
-
-
 
         test_data_set, test_data_loader = data_provider(
             test, config, timeenc=1, batch_size=1, shuffle=False, drop_last=False
@@ -298,7 +311,9 @@ class TransformerAdapter:
                     answer = np.concatenate([answer, temp], axis=0)
 
                 if answer.shape[0] >= pred_len:
-                    answer[-pred_len:] = self.scaler.inverse_transform(answer[-pred_len:])
+                    answer[-pred_len:] = self.scaler.inverse_transform(
+                        answer[-pred_len:]
+                    )
                     return answer[-pred_len:]
 
                 output = output.cpu().numpy()[:, -config.pred_len :, :]

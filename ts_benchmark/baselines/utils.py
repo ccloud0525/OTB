@@ -253,12 +253,14 @@ class SlidingWindowDataLoader:
 #
 #         self.data_stamp = pd.DataFrame(data_stamp)
 
+
 def train_val_split(train_data, ratio, seq_len):
     border = int((train_data.shape[0]) * ratio)
 
     train_data_value, valid_data_rest = split_before(train_data, border)
     train_data_rest, valid_data = split_before(train_data, border - seq_len)
     return train_data_value, valid_data
+
 
 def data_provider(data, config, timeenc, batch_size, shuffle, drop_last):
     dataset = DatasetForTransformer(
