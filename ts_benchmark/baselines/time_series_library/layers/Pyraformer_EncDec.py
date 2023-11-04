@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.modules.linear import Linear
-from ts_benchmark.baselines.time_series_library.layers.SelfAttention_Family import AttentionLayer, FullAttention
-from ts_benchmark.baselines.time_series_library.layers.Embed import DataEmbedding
+from ts_benchmark.baselines.time_series_library1.layers.SelfAttention_Family import AttentionLayer, FullAttention
+from ts_benchmark.baselines.time_series_library1.layers.Embed import DataEmbedding
 import math
 
 
@@ -33,12 +33,12 @@ def get_mask(input_size, window_size, inner_size):
         start = sum(all_size[:layer_idx])
         for i in range(start, start + all_size[layer_idx]):
             left_side = (start - all_size[layer_idx - 1]) + \
-                        (i - start) * window_size[layer_idx - 1]
+                (i - start) * window_size[layer_idx - 1]
             if i == (start + all_size[layer_idx] - 1):
                 right_side = start
             else:
                 right_side = (
-                                     start - all_size[layer_idx - 1]) + (i - start + 1) * window_size[layer_idx - 1]
+                    start - all_size[layer_idx - 1]) + (i - start + 1) * window_size[layer_idx - 1]
             mask[i, left_side:right_side] = 1
             mask[left_side:right_side, i] = 1
 
@@ -59,7 +59,7 @@ def refer_points(all_sizes, window_size):
             start = sum(all_sizes[:j])
             inner_layer_idx = former_index - (start - all_sizes[j - 1])
             former_index = start + \
-                           min(inner_layer_idx // window_size[j - 1], all_sizes[j] - 1)
+                min(inner_layer_idx // window_size[j - 1], all_sizes[j] - 1)
             indexes[i][j] = former_index
 
     indexes = indexes.unsqueeze(0).unsqueeze(3)
@@ -103,7 +103,7 @@ class Encoder(nn.Module):
     def __init__(self, configs, window_size, inner_size):
         super().__init__()
 
-        d_bottleneck = configs.d_model // 4
+        d_bottleneck = configs.d_model//4
 
         self.mask, self.all_size = get_mask(
             configs.seq_len, window_size, inner_size)

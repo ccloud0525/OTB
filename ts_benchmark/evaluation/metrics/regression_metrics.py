@@ -2,7 +2,7 @@
 
 import numpy as np
 
-__all__ = ["mae", "mse", "rmse", "mape", "smape", "mase"]
+__all__ = ["mae", "mse", "rmse", "mape", "smape", "mase", 'wape', 'msmape']
 
 
 def _error(actual: np.ndarray, predicted: np.ndarray, **kwargs):
@@ -75,3 +75,31 @@ def smape(actual: np.ndarray, predicted: np.ndarray, **kwargs):
         )
         * 100
     )
+
+def wape(actual: np.ndarray, predicted: np.ndarray, **kwargs):
+    """Masked weighted absolute percentage error (WAPE)
+
+    Args:
+        preds (torch.Tensor): predicted values
+        labels (torch.Tensor): labels
+    Returns:
+        torch.Tensor: masked mean absolute error
+    """
+    loss = np.sum(np.abs(actual - predicted)) / np.sum(np.abs(actual)) * 100
+    return loss
+
+def msmape(actual: np.ndarray, predicted: np.ndarray, epsilon: float = 0.1, **kwargs):
+    """
+    Function to calculate series wise smape values
+
+    Parameters
+    forecasts - a matrix containing forecasts for a set of series
+                no: of rows should be equal to number of series and no: of columns should be equal to the forecast horizon
+    test_set - a matrix with the same dimensions as 'forecasts' containing the actual values corresponding with them
+    """
+
+    comparator = np.full_like(actual, 0.5 + epsilon)
+    denom = np.maximum(comparator, np.abs(predicted) + np.abs(actual) + epsilon)
+    msmape_per_series = np.mean(2 * np.abs(predicted - actual) / denom) * 100
+    return msmape_per_series
+

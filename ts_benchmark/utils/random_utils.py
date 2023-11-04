@@ -2,7 +2,7 @@ import random
 
 import numpy as np
 import torch
-SEED = 2023
+SEED = 2021
 
 def fix_random_seed():
     random.seed(SEED)

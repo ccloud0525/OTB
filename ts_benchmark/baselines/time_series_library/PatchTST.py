@@ -1,8 +1,9 @@
 import torch
 from torch import nn
-from .layers.Transformer_EncDec import Encoder, EncoderLayer
-from .layers.SelfAttention_Family import FullAttention, AttentionLayer
+
 from .layers.Embed import PatchEmbedding
+from .layers.SelfAttention_Family import FullAttention, AttentionLayer
+from .layers.Transformer_EncDec import Encoder, EncoderLayer
 
 
 class FlattenHead(nn.Module):
@@ -25,7 +26,8 @@ class PatchTST(nn.Module):
     Paper link: https://arxiv.org/pdf/2211.14730.pdf
     """
 
-    def __init__(self, config, patch_len=16, stride=8):
+    # def __init__(self, config, patch_len=16, stride=8):
+    def __init__(self, config):
         """
         patch_len: int, patch len for patch_embedding
         stride: int, stride for patch_embedding
@@ -34,11 +36,13 @@ class PatchTST(nn.Module):
         self.task_name = config.task_name
         self.seq_len = config.seq_len
         self.pred_len = config.pred_len
-        padding = stride
+        self.patch_len = config.patch_len
+        self.stride = config.stride
+        padding = self.stride
 
         # patching and embedding
         self.patch_embedding = PatchEmbedding(
-            config.d_model, patch_len, stride, padding, config.dropout
+            config.d_model, self.patch_len, self.stride, padding, config.dropout
         )
 
         # Encoder
@@ -66,7 +70,7 @@ class PatchTST(nn.Module):
         )
 
         # Prediction Head
-        self.head_nf = config.d_model * int((config.seq_len - patch_len) / stride + 2)
+        self.head_nf = config.d_model * int((config.seq_len - self.patch_len) / self.stride + 2)
         if (
             self.task_name == "long_term_forecast"
             or self.task_name == "short_term_forecast"

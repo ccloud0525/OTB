@@ -33,7 +33,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config-path",
         type=str,
-        # default="fixed_forecast_config.json",
         required=True,
         choices=[
             "fixed_forecast_config.json",
@@ -51,7 +50,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data-set-name",
         type=str,
-        # default="small_forecast",
         required=True,
         choices=[
             "large_forecast",
@@ -62,6 +60,14 @@ if __name__ == "__main__":
             "small_detect",
         ],
         help="dataset name",
+    )
+
+    parser.add_argument(
+        "--typical-data-name-list",
+        type=str,
+        nargs="+",
+        default=None,
+        help="typical_data_name_list",
     )
 
     # model_config
@@ -160,14 +166,6 @@ if __name__ == "__main__":
         help="Presentation form of algorithm performance comparison results",
     )
 
-    # Set random seeds
-    parser.add_argument(
-        "--random-seed",
-        type=int,
-        default=None,
-        help="Whether to set random seeds",
-    )
-
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -176,12 +174,6 @@ if __name__ == "__main__":
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    if args.random_seed is not None:
-        fix_seed = args.random_seed
-        random.seed(fix_seed)
-        torch.manual_seed(fix_seed)
-        np.random.seed(fix_seed)
-    # TODO：这里random seed不能影响ray actor内部的种子
 
     with open(os.path.join(CONFIG_PATH, args.config_path), "r") as file:
         config_data = json.load(file)
@@ -199,8 +191,17 @@ if __name__ == "__main__":
 
     data_loader_config = config_data["data_loader_config"]
     data_loader_config["data_set_name"] = args.data_set_name
+    data_loader_config["typical_data_name_list"] = args.typical_data_name_list
 
     model_config = config_data.get("model_config", None)
+
+    if args.adapter is not None:
+        if len(args.model_name) > len(args.adapter):
+            args.adapter.extend([None] * (len(args.model_name) - len(args.adapter)))
+
+    if args.model_hyper_params is not None:
+        if len(args.model_name) > len(args.model_hyper_params):
+            args.model_hyper_params.extend([None] * (len(args.model_name) - len(args.model_hyper_params)))
 
     args.adapter = (
         [None if item == "None" else item for item in args.adapter]

@@ -1,34 +1,44 @@
 import torch
 import torch.nn as nn
-from .time_series_library.utils.tools import EarlyStopping
+from sklearn.preprocessing import StandardScaler
+
+from .time_series_library.utils.tools import EarlyStopping, adjust_learning_rate
 from ts_benchmark.utils.data_processing import split_before
 from typing import Type, Dict
 from torch import optim
-
 import numpy as np
 import pandas as pd
-from ts_benchmark.baselines.utils import DataloaderForTransformer
+from ts_benchmark.baselines.utils import data_provider, train_val_split
 
 DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
-    "top_k": 1,
+    "top_k": 5,
     "enc_in": 1,
     "dec_in": 1,
     "c_out": 1,
     "e_layers": 2,
-    "d_layers": 2,
-    "d_model": 32,
-    "d_ff": 32,
+    "d_layers": 1,
+    "d_model": 512,
+    "d_ff": 2048,
     "embed": "timeF",
     "freq": "h",
+    "lradj": "type1",
     "moving_avg": 25,
     "num_kernels": 6,
-    "factor": 3,
+    "factor": 1,
     "n_heads": 8,
     "activation": "gelu",
     "output_attention": 0,
+    "patch_len": 16,
+    "stride": 8,
     "dropout": 0.1,
+    "batch_size": 32,
     "lr": 0.0001,
-    "num_epochs": 100,
+    "num_epochs": 10,
+    "num_workers": 0,
+    "loss": "MSE",
+    "itr": 1,
+    "distil": True,
+    "patience": 3,
     "task_name": "short_term_forecast",
     "p_hidden_dims": [128, 128],
     "p_hidden_layers": 2,
@@ -50,6 +60,7 @@ class TransformerAdapter:
         self.config = TransformerConfig(**kwargs)
         self.model_name = model_name
         self.model_class = model_class
+        self.scaler = StandardScaler()
 
     @staticmethod
     def required_hyper_params() -> dict:
@@ -70,7 +81,7 @@ class TransformerAdapter:
         freq = pd.infer_freq(train_data.index)
         if freq == None:
             raise ValueError("不规则的时间间隔")
-        elif freq[0].lower() not in ["m", "w", "t", "b", "d", "s"]:
+        elif freq[0].lower() not in ["m", "w", "b", "d", "h", "t", "s"]:
             self.config.freq = "s"
         else:
             self.config.freq = freq[0].lower()
@@ -136,7 +147,7 @@ class TransformerAdapter:
         self.model.train()
         return total_loss
 
-    def forecast_fit(self, train_data: pd.DataFrame):
+    def forecast_fit(self, train_data: pd.DataFrame, ratio):
         """
         训练模型。
 
@@ -144,31 +155,33 @@ class TransformerAdapter:
         """
         self.hyper_param_tune(train_data)
         self.model = self.model_class(self.config)
-
+        print("----------------------------------------------------------", self.model_name)
         config = self.config
-        border = int((train_data.shape[0]) * 0.8)
 
-        train_data, valid_data = split_before(train_data, border)
-        valid_data_loader = DataloaderForTransformer(
-            dataset=valid_data,
-            batch_size=64,
-            history_len=config.seq_len,
-            prediction_len=config.pred_len,
-            label_len=config.label_len,
-            shuffle=False,
-            timeenc=0,
-            freq=config.freq,
+        train_data_value, valid_data = train_val_split(train_data, ratio, config.seq_len)
+        self.scaler.fit(train_data_value.values)
+
+        train_data_value = pd.DataFrame(self.scaler.transform(train_data_value.values), columns=train_data_value.columns,
+                                              index=train_data_value.index)
+        valid_data = pd.DataFrame(self.scaler.transform(valid_data.values), columns=valid_data.columns,
+                                              index=valid_data.index)
+
+        valid_dataset, valid_data_loader = data_provider(
+            valid_data,
+            config,
+            timeenc=1,
+            batch_size=config.batch_size,
+            shuffle=True,
+            drop_last=True,
         )
-        # Create the data loader (dataloader)
-        train_data_loader = DataloaderForTransformer(
-            dataset=train_data,
-            batch_size=64,
-            history_len=config.seq_len,
-            prediction_len=config.pred_len,
-            label_len=config.label_len,
-            shuffle=False,
-            timeenc=0,
-            freq=config.freq,
+
+        train_dataset, train_data_loader = data_provider(
+            train_data_value,
+            config,
+            timeenc=1,
+            batch_size=config.batch_size,
+            shuffle=True,
+            drop_last=True,
         )
 
         # Define the loss function and optimizer
@@ -178,12 +191,23 @@ class TransformerAdapter:
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        early_stopping = EarlyStopping()
+        early_stopping = EarlyStopping(patience=config.patience)
         self.model.to(device)
+        # 计算可学习参数的总数
+        total_params = sum(
+            p.numel() for p in self.model.parameters() if p.requires_grad
+        )
+
+        print(f"Total trainable parameters: {total_params}")
+
+        # print(self.model.state_dict())
 
         for epoch in range(config.num_epochs):
             self.model.train()
-            for input, target, input_mark, target_mark in train_data_loader:
+            # for input, target, input_mark, target_mark in train_data_loader:
+            for i, (input, target, input_mark, target_mark) in enumerate(
+                train_data_loader
+            ):
                 optimizer.zero_grad()
                 input, target, input_mark, target_mark = (
                     input.to(device),
@@ -213,6 +237,8 @@ class TransformerAdapter:
                 self.model.load_state_dict(early_stopping.check_point)
                 break
 
+            adjust_learning_rate(optimizer, epoch + 1, config)
+
     def forecast(self, pred_len: int, train: pd.DataFrame) -> np.ndarray:
         """
         进行预测。
@@ -221,6 +247,9 @@ class TransformerAdapter:
         :param testdata: 用于预测的时间序列数据。
         :return: 预测结果的数组。
         """
+        train = pd.DataFrame(self.scaler.transform(train.values), columns=train.columns,
+                                              index=train.index)
+
         if self.model is None:
             raise ValueError("Model not trained. Call the fit() function first.")
 
@@ -230,15 +259,10 @@ class TransformerAdapter:
         # 生成transformer类方法需要的额外时间戳mark
         test = self.padding_data_for_forecast(test)
 
-        test_data_loader = DataloaderForTransformer(
-            dataset=test,
-            batch_size=1,
-            history_len=config.seq_len,
-            prediction_len=config.pred_len,
-            label_len=config.label_len,
-            shuffle=False,
-            timeenc=0,
-            freq=config.freq,
+
+
+        test_data_set, test_data_loader = data_provider(
+            test, config, timeenc=1, batch_size=1, shuffle=False, drop_last=False
         )
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -264,7 +288,6 @@ class TransformerAdapter:
                         .to(device)
                     )
                     output = self.model(input, input_mark, dec_input, target_mark)
-                    break
 
                 column_num = output.shape[-1]
                 temp = output.cpu().numpy().reshape(-1, column_num)[-config.pred_len :]
@@ -275,6 +298,7 @@ class TransformerAdapter:
                     answer = np.concatenate([answer, temp], axis=0)
 
                 if answer.shape[0] >= pred_len:
+                    answer[-pred_len:] = self.scaler.inverse_transform(answer[-pred_len:])
                     return answer[-pred_len:]
 
                 output = output.cpu().numpy()[:, -config.pred_len :, :]
@@ -283,15 +307,14 @@ class TransformerAdapter:
 
                 test = test.iloc[config.pred_len :]
                 test = self.padding_data_for_forecast(test)
-                test_data_loader = DataloaderForTransformer(
-                    dataset=test,
+
+                test_data_set, test_data_loader = data_provider(
+                    test,
+                    config,
+                    timeenc=1,
                     batch_size=1,
-                    history_len=config.seq_len,
-                    prediction_len=config.pred_len,
-                    label_len=config.label_len,
                     shuffle=False,
-                    timeenc=0,
-                    freq=config.freq,
+                    drop_last=False,
                 )
 
 

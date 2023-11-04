@@ -5,8 +5,8 @@ from typing import List
 
 import pandas as pd
 
-from ts_benchmark.common.constant import META_FORECAST_DATA_PATH
 from ts_benchmark.common.constant import META_DETECTION_DATA_PATH
+from ts_benchmark.common.constant import META_FORECAST_DATA_PATH
 
 SIZE = {
     "large_forecast": ["large", "medium", "small"],
@@ -27,6 +27,11 @@ def load_data(data_loader_config: dict) -> List[str]:
     :raises RuntimeError: 如果 feature_dict 为 None。
     """
     feature_dict = data_loader_config.get("feature_dict", None)
+
+    typical_data_name_list = data_loader_config.get("typical_data_name_list", None)
+    if typical_data_name_list is not None:
+        return typical_data_name_list
+
     if feature_dict is None:
         raise RuntimeError("feature_dict is None")
 
@@ -60,9 +65,4 @@ def load_data(data_loader_config: dict) -> List[str]:
         .tolist()
     )
 
-    # data_name_list = ['swat.csv', 'SMD.csv', 'SMAP.csv', 'MSL.csv', 'PSM.csv']
-    # data_name_list = ['exchange_rate.csv', 'ETTh1.csv', 'ETTh2.csv', 'ETTm1.csv', 'ETTm2.csv', 'national_illness.csv']
-    # data_name_list = ['metr-la.csv', 'pems03.csv', 'pems04.csv', 'pems07.csv', 'pems08.csv']
-    data_name_list = ['rideshare_dataset_without_missing_values.csv']
-    print(data_name_list)
     return data_name_list

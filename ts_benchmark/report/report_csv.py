@@ -37,6 +37,15 @@ def report(report_config: dict) -> None:
         log_files if isinstance(log_files, pd.DataFrame) else _load_log_data(log_files)
     )
 
+    # ---------------------------------------------------------删除
+    selected_column = report_config["report_metrics"]  # 替换为您想要处理的列的名称
+    for column in selected_column:
+        column_index = log_data.columns.get_loc(column)
+        for row in range(log_data.shape[0]):
+            log_data.iloc[row, column_index] = float(log_data.iloc[row, column_index].split(';')[0])
+    # ---------------------------------------------------------删除
+
+
     leaderboard_df = get_leaderboard(
         log_files,
         log_data,
@@ -45,6 +54,9 @@ def report(report_config: dict) -> None:
         report_config.get("fill_type", "mean_value"),
         report_config.get("null_value_threshold", 0.3),
     )
+
+    num_rows = leaderboard_df.shape[0]
+    leaderboard_df.insert(0, 'strategy_args', [log_data.iloc[0, 1]] * num_rows)
 
     # Create final DataFrame and save to CSV
     leaderboard_df.to_csv(

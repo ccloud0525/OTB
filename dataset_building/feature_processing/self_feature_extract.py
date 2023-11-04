@@ -217,12 +217,13 @@ def feature_extract(path):
     series_length = [original_df.shape[0]]
     try:
         # ADF Test 原假设是非平稳， P值小于0.05时序列是平稳的， P值越小越平稳。如果p_value值比0.05小，证明有单位根，也就是说序列平稳。如果p_value比0.05大则证明非平稳。
-        ADF_P_value = adfuller(limited_length_df.iloc[:, 0].values, autolag="AIC")[1]
+        # ADF_P_value = adfuller(limited_length_df.iloc[:, 0].values, autolag="AIC")[1]
+        ADF_P_value = [adfuller(limited_length_df.iloc[:, 0].values + 1e-10, autolag="AIC")[1]]
 
         # KPSS Test 原假设是平稳的， P值小于0.05则序列是非平稳的， P值越大越平稳
-        KPSS_P_value = kpss(limited_length_df.iloc[:, 0].values, regression="c")[1]
+        KPSS_P_value = [kpss(limited_length_df.iloc[:, 0].values, regression="c")[1]]
 
-        stability = [ADF_P_value <= 0.05 or KPSS_P_value >= 0.05]
+        stability = [ADF_P_value[0] <= 0.05 or KPSS_P_value[0] >= 0.05]
 
     except:
         ADF_P_value = [None]
@@ -304,8 +305,8 @@ def feature_extract(path):
         + result_list
         + if_seasonal
         + if_trend
-        + [ADF_P_value]
-        + [KPSS_P_value]
+        + ADF_P_value
+        + KPSS_P_value
         + stability
         + other_features
     )

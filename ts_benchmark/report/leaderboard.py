@@ -170,6 +170,15 @@ def get_leaderboard(
     results_of_evaluated_algorithm = pd.read_csv(
         os.path.join(ROOT_PATH, log_files_list[0])
     )
+
+    # ---------------------------------------------------------删除
+    selected_column = report_metrics  # 替换为您想要处理的列的名称
+    for column in selected_column:
+        column_index = results_of_evaluated_algorithm.columns.get_loc(column)
+        for row in range(results_of_evaluated_algorithm.shape[0]):
+            results_of_evaluated_algorithm.iloc[row, column_index] = float(results_of_evaluated_algorithm.iloc[row, column_index].split(';')[0])
+    # ---------------------------------------------------------删除
+
     if isinstance(report_metrics, str):
         report_metrics = [report_metrics]
 
