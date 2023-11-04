@@ -5,7 +5,9 @@ import pandas as pd
 import torch
 from torch.utils.data import DataLoader
 
-from ts_benchmark.baselines.time_series_library1.utils.timefeatures import time_features
+from ts_benchmark.baselines.time_series_library.utils.timefeatures import time_features
+
+from ts_benchmark.utils.data_processing import split_before
 
 
 class SlidingWindowDataLoader:
@@ -251,6 +253,12 @@ class SlidingWindowDataLoader:
 #
 #         self.data_stamp = pd.DataFrame(data_stamp)
 
+def train_val_split(train_data, ratio, seq_len):
+    border = int((train_data.shape[0]) * ratio)
+
+    train_data_value, valid_data_rest = split_before(train_data, border)
+    train_data_rest, valid_data = split_before(train_data, border - seq_len)
+    return train_data_value, valid_data
 
 def data_provider(data, config, timeenc, batch_size, shuffle, drop_last):
     dataset = DatasetForTransformer(
@@ -334,7 +342,7 @@ class DatasetForTransformer:
             )
             data_stamp = data_stamp.transpose(1, 0)
 
-        self.data_stamp = pd.DataFrame(data_stamp)
+        self.data_stamp = pd.DataFrame(data_stamp, dtype=float)
 
     def __getitem__(self, index):
         s_begin = index

@@ -1,12 +1,14 @@
 import torch
 import torch.nn as nn
+from sklearn.preprocessing import StandardScaler
+
 from .time_series_library.utils.tools import EarlyStopping, adjust_learning_rate
 from ts_benchmark.utils.data_processing import split_before
 from typing import Type, Dict
 from torch import optim
 import numpy as np
 import pandas as pd
-from ts_benchmark.baselines.utils import data_provider
+from ts_benchmark.baselines.utils import data_provider, train_val_split
 
 DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "top_k": 5,
@@ -32,9 +34,10 @@ DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "batch_size": 32,
     "lr": 0.0001,
     "num_epochs": 10,
-    "num_workers": 10,
+    "num_workers": 0,
     "loss": "MSE",
     "itr": 1,
+    "distil": True,
     "patience": 3,
     "task_name": "short_term_forecast",
     "p_hidden_dims": [128, 128],
@@ -57,6 +60,7 @@ class TransformerAdapter:
         self.config = TransformerConfig(**kwargs)
         self.model_name = model_name
         self.model_class = model_class
+        self.scaler = StandardScaler()
 
     @staticmethod
     def required_hyper_params() -> dict:
@@ -143,7 +147,7 @@ class TransformerAdapter:
         self.model.train()
         return total_loss
 
-    def forecast_fit(self, train_data: pd.DataFrame):
+    def forecast_fit(self, train_data: pd.DataFrame, ratio):
         """
         训练模型。
 
@@ -151,11 +155,16 @@ class TransformerAdapter:
         """
         self.hyper_param_tune(train_data)
         self.model = self.model_class(self.config)
+        print("----------------------------------------------------------", self.model_name)
         config = self.config
-        border = int((train_data.shape[0]) * 0.75)
 
-        train_data_value, valid_data_rest = split_before(train_data, border)
-        train_data_rest, valid_data = split_before(train_data, border - config.seq_len)
+        train_data_value, valid_data = train_val_split(train_data, ratio, config.seq_len)
+        self.scaler.fit(train_data_value.values)
+
+        train_data_value = pd.DataFrame(self.scaler.transform(train_data_value.values), columns=train_data_value.columns,
+                                              index=train_data_value.index)
+        valid_data = pd.DataFrame(self.scaler.transform(valid_data.values), columns=valid_data.columns,
+                                              index=valid_data.index)
 
         valid_dataset, valid_data_loader = data_provider(
             valid_data,
@@ -238,6 +247,9 @@ class TransformerAdapter:
         :param testdata: 用于预测的时间序列数据。
         :return: 预测结果的数组。
         """
+        train = pd.DataFrame(self.scaler.transform(train.values), columns=train.columns,
+                                              index=train.index)
+
         if self.model is None:
             raise ValueError("Model not trained. Call the fit() function first.")
 
@@ -246,6 +258,8 @@ class TransformerAdapter:
 
         # 生成transformer类方法需要的额外时间戳mark
         test = self.padding_data_for_forecast(test)
+
+
 
         test_data_set, test_data_loader = data_provider(
             test, config, timeenc=1, batch_size=1, shuffle=False, drop_last=False
@@ -284,6 +298,7 @@ class TransformerAdapter:
                     answer = np.concatenate([answer, temp], axis=0)
 
                 if answer.shape[0] >= pred_len:
+                    answer[-pred_len:] = self.scaler.inverse_transform(answer[-pred_len:])
                     return answer[-pred_len:]
 
                 output = output.cpu().numpy()[:, -config.pred_len :, :]

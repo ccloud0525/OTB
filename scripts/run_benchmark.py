@@ -33,7 +33,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config-path",
         type=str,
-        default="rolling_forecast_config.json",
         required=True,
         choices=[
             "fixed_forecast_config.json",
@@ -51,7 +50,6 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data-set-name",
         type=str,
-        default="small_forecast",
         required=True,
         choices=[
             "large_forecast",
@@ -68,8 +66,7 @@ if __name__ == "__main__":
         "--typical-data-name-list",
         type=str,
         nargs="+",
-        # default=None,
-        default="ETTh1.csv",
+        default=None,
         help="typical_data_name_list",
     )
 
@@ -78,8 +75,7 @@ if __name__ == "__main__":
         "--adapter",
         type=str,
         nargs="+",
-        # default=None,
-        default="transformer_adapter",
+        default=None,
         help="Adapters for converting models",
     )
 
@@ -88,7 +84,6 @@ if __name__ == "__main__":
         type=str,
         nargs="+",
         required=True,
-        default="tslibrary.FEDformer.FEDformer",
         help="model path to evaluate",
     )
     parser.add_argument(
@@ -136,23 +131,20 @@ if __name__ == "__main__":
         "--gpus",
         type=int,
         nargs="+",
-        # default=None,
-        default=7,
+        default=None,
         help="list of gpu devices to use, only available in certain backends",
     )
     parser.add_argument(
         "--num-workers",
         type=int,
-        # default=os.cpu_count(),
-        default=1,
+        default=os.cpu_count(),
         help="number of evaluation workers",
     )
     # TODO: should timeout be part of the configuration file?
     parser.add_argument(
         "--timeout",
         type=float,
-        # default=600,
-        default=6000,
+        default=600,
         help="time limit for each evaluation task, in seconds",
     )
 

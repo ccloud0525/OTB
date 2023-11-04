@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from math import sqrt
-from ts_benchmark.baselines.time_series_library1.utils.masking import TriangularCausalMask, ProbMask
+from ts_benchmark.baselines.time_series_library.utils.masking import TriangularCausalMask, ProbMask
 from reformer_pytorch import LSHSelfAttention
 from einops import rearrange, repeat
 
