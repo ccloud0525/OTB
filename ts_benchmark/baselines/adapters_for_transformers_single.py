@@ -42,6 +42,8 @@ DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "task_name": "short_term_forecast",
     "p_hidden_dims": [128, 128],
     "p_hidden_layers": 2,
+    "mem_dim": 32,
+
 }
 
 
@@ -298,7 +300,7 @@ def generate_model_factory(
     }
 
 
-def transformer_adapter(model_info: Type[object]) -> object:
+def transformer_adapter_single(model_info: Type[object]) -> object:
     if not isinstance(model_info, type):
         raise ValueError("the model_info does not exist")
 
