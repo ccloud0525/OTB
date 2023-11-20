@@ -75,10 +75,10 @@ class MerlionModelAdapter:
         self.model = self.model_class(config_obj)
         series = TimeSeries.from_pd(series)
         label = TimeSeries.from_pd(label)
-        if self.allow_label_on_train:
-            return self.model.train(train_data=series, anomaly_labels=label)
-        else:
-            return self.model.train(series)
+        # if self.allow_label_on_train:
+        #     return self.model.train(train_data=series, anomaly_labels=label)
+        # else:
+        return self.model.train(series)
 
     def detect_score(self, train: pd.DataFrame) -> np.ndarray:
         """

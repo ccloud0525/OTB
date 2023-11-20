@@ -5,6 +5,7 @@ import time
 import traceback
 from typing import List, Any
 
+import numpy as np
 import pandas as pd
 
 from ts_benchmark.data_loader.data_pool import DataPool
@@ -33,6 +34,69 @@ class AnomalyDetect(Strategy):
         self.model = None
         self.data_lens = None
 
+    # def execute(self, series_name: str, model_factory: ModelFactory) -> Any:
+    #     """
+    #     执行异常检测策略。
+    #
+    #     :param series_name: 要执行异常检测的序列名称。
+    #     :param model_factory: 模型对象的构造/工厂函数。
+    #     :return: 评估结果。
+    #     """
+    #     fix_random_seed()
+    #
+    #     model = model_factory()
+    #     try:
+    #         self.model = model
+    #         train_data, train_label, test_data, test_label = self.split_data(
+    #             series_name
+    #         )
+    #         start_fit_time = time.time()
+    #         if hasattr(model, "detect_fit"):
+    #             self.model.detect_fit(train_data, train_label)  # 在训练数据上拟合模型
+    #         else:
+    #             self.model.fit(train_data, train_label)  # 在训练数据上拟合模型
+    #         end_fit_time = time.time()
+    #         predict_label = self.detect(test_data)
+    #         end_inference_time = time.time()
+    #         actual_label = test_label.to_numpy().flatten()
+    #         single_series_results, log_info = self.evaluator.evaluate_with_log(
+    #             actual_label.astype(float), predict_label.astype(float), train_data.values
+    #         )
+    #
+    #         single_series_results = [
+    #             str(f"{a};{b}")
+    #             for a, b in zip(
+    #                 single_series_results, single_series_results
+    #             )
+    #         ]
+    #
+    #         inference_data = pd.DataFrame(
+    #             predict_label, columns=test_label.columns, index=test_label.index
+    #         )
+    #         actual_data_pickle = pickle.dumps(test_label)
+    #         # 使用 base64 进行编码
+    #         actual_data_pickle = base64.b64encode(actual_data_pickle).decode(
+    #             "utf-8"
+    #         )
+    #
+    #         inference_data_pickle = pickle.dumps(inference_data)
+    #         # 使用 base64 进行编码
+    #         inference_data_pickle = base64.b64encode(inference_data_pickle).decode(
+    #             "utf-8"
+    #         )
+    #         single_series_results += [
+    #             series_name,
+    #             end_fit_time - start_fit_time,
+    #             end_inference_time - end_fit_time,
+    #             actual_data_pickle,
+    #             inference_data_pickle,
+    #             log_info,
+    #         ]
+    #     except Exception as e:
+    #         log = f"{traceback.format_exc()}\n{e}"
+    #         single_series_results = self.get_default_result(**{FieldNames.LOG_INFO: log})
+    #     return single_series_results
+
     def execute(self, series_name: str, model_factory: ModelFactory) -> Any:
         """
         执行异常检测策略。
@@ -51,24 +115,58 @@ class AnomalyDetect(Strategy):
             )
             start_fit_time = time.time()
             if hasattr(model, "detect_fit"):
-                self.model.detect_fit(train_data, train_label)  # 在训练数据上拟合模型
+                # self.model.detect_fit(train_data, train_label)  # 在训练数据上拟合模型
+                self.model.detect_fit(train_data, test_data)  # 在训练数据上拟合模型
             else:
                 self.model.fit(train_data, train_label)  # 在训练数据上拟合模型
+
             end_fit_time = time.time()
             predict_label = self.detect(test_data)
-            end_inference_time = time.time()
             actual_label = test_label.to_numpy().flatten()
+
+            # if self.model.win_size is not None:
+            #     actual_label1 = actual_label[
+            #         : len(actual_label) - len(actual_label) % self.model.win_size
+            #     ]
+            #     # actual_label1 = actual_label[
+            #     #     : len(actual_label) - len(actual_label) % self.model.seq_len
+            #     # ]
+            #     single_series_results, log_info = self.evaluator.evaluate_with_log(
+            #         actual_label1.astype(float),
+            #         predict_label.astype(float),
+            #         train_data.values,
+            #     )
+            #     print(single_series_results)
+
+            remaining_length = len(actual_label) - len(predict_label)
+            # Pad the predict_label array with zeros at the end
+            if remaining_length > 0:
+                predict_label = np.pad(
+                    predict_label,
+                    (0, remaining_length),
+                    mode="constant",
+                    constant_values=0,
+                )
+
+            end_inference_time = time.time()
             single_series_results, log_info = self.evaluator.evaluate_with_log(
-                actual_label.astype(float), predict_label.astype(float), train_data.values
+                actual_label.astype(float),
+                predict_label.astype(float),
+                train_data.values,
             )
+            print(single_series_results)
+
+            single_series_results = [
+                str(f"{a};{b}")
+                for a, b in zip(single_series_results, single_series_results)
+            ]
+
             inference_data = pd.DataFrame(
                 predict_label, columns=test_label.columns, index=test_label.index
             )
             actual_data_pickle = pickle.dumps(test_label)
             # 使用 base64 进行编码
-            actual_data_pickle = base64.b64encode(actual_data_pickle).decode(
-                "utf-8"
-            )
+            actual_data_pickle = base64.b64encode(actual_data_pickle).decode("utf-8")
 
             inference_data_pickle = pickle.dumps(inference_data)
             # 使用 base64 进行编码
@@ -85,7 +183,9 @@ class AnomalyDetect(Strategy):
             ]
         except Exception as e:
             log = f"{traceback.format_exc()}\n{e}"
-            single_series_results = self.get_default_result(**{FieldNames.LOG_INFO: log})
+            single_series_results = self.get_default_result(
+                **{FieldNames.LOG_INFO: log}
+            )
         return single_series_results
 
     def split_data(self, data: str):
@@ -116,12 +216,16 @@ class FixedDetectScore(AnomalyDetect):
     def split_data(self, series_name):
         data = DataPool().get_series(series_name)
         self.data_lens = len(data)
-        train_length = int(
-            self.strategy_config["train_test_split"] * self.data_lens
-        )
+        train_length = int(self.strategy_config["train_test_split"] * self.data_lens)
         train, test = split_before(data, train_length)
-        train_data, train_label = train.loc[:, train.columns != 'label'], train.loc[:, ['label']]
-        test_data, test_label = test.loc[:, train.columns != 'label'], test.loc[:, ['label']]
+        train_data, train_label = (
+            train.loc[:, train.columns != "label"],
+            train.loc[:, ["label"]],
+        )
+        test_data, test_label = (
+            test.loc[:, train.columns != "label"],
+            test.loc[:, ["label"]],
+        )
         return train_data, train_label, test_data, test_label
 
     def detect(self, test_data):
@@ -138,12 +242,16 @@ class FixedDetectLabel(AnomalyDetect):
     def split_data(self, series_name: str):
         data = DataPool().get_series(series_name)
         self.data_lens = len(data)
-        train_length = int(
-            self.strategy_config["train_test_split"] * self.data_lens
-        )
+        train_length = int(self.strategy_config["train_test_split"] * self.data_lens)
         train, test = split_before(data, train_length)
-        train_data, train_label = train.loc[:, train.columns != 'label'], train.loc[:, ['label']]
-        test_data, test_label = test.loc[:, train.columns != 'label'], test.loc[:, ['label']]
+        train_data, train_label = (
+            train.loc[:, train.columns != "label"],
+            train.loc[:, ["label"]],
+        )
+        test_data, test_label = (
+            test.loc[:, train.columns != "label"],
+            test.loc[:, ["label"]],
+        )
         return train_data, train_label, test_data, test_label
 
     def detect(self, test_data):
@@ -157,11 +265,20 @@ class FixedDetectLabel(AnomalyDetect):
 class UnFixedDetectScore(AnomalyDetect):
     def split_data(self, series_name: str):
         data = DataPool().get_series(series_name)
-        train_length = int(DataPool().get_series_meta_info(series_name)["train_lens"].item())
+        data = data.reset_index(drop=True)
+        train_length = int(
+            DataPool().get_series_meta_info(series_name)["train_lens"].item()
+        )
         train, test = split_before(data, train_length)
-        train_data, train_label = train.loc[:, train.columns != 'label'], train.loc[:, ['label']]
+        train_data, train_label = (
+            train.loc[:, train.columns != "label"],
+            train.loc[:, ["label"]],
+        )
 
-        test_data, test_label = test.loc[:, train.columns != 'label'], test.loc[:, ['label']]
+        test_data, test_label = (
+            test.loc[:, train.columns != "label"],
+            test.loc[:, ["label"]],
+        )
         return train_data, train_label, test_data, test_label
 
     def detect(self, test_data):
@@ -175,14 +292,24 @@ class UnFixedDetectScore(AnomalyDetect):
 class UnFixedDetectLabel(AnomalyDetect):
     def split_data(self, series_name):
         data = DataPool().get_series(series_name)
-        train_length = int(DataPool().get_series_meta_info(series_name)["train_lens"].item())
+        data = data.reset_index(drop=True)
+        train_length = int(
+            DataPool().get_series_meta_info(series_name)["train_lens"].item()
+        )
         train, test = split_before(data, train_length)
-        train_data, train_label = train.loc[:, train.columns != 'label'], train.loc[:, ['label']]
-        test_data, test_label = test.loc[:, train.columns != 'label'], test.loc[:, ['label']]
+        train_data, train_label = (
+            train.loc[:, train.columns != "label"],
+            train.loc[:, ["label"]],
+        )
+        test_data, test_label = (
+            test.loc[:, train.columns != "label"],
+            test.loc[:, ["label"]],
+        )
         return train_data, train_label, test_data, test_label
 
     def detect(self, test_data):
         return self.model.detect_label(test_data)
+
 
     @staticmethod
     def accepted_metrics():
@@ -194,8 +321,11 @@ class AllDetectScore(AnomalyDetect):
         data = DataPool().get_series(series_name)
         train = data
         test = data
-        train_data, train_label = train.loc[:, train.columns != 'label'], None
-        test_data, test_label = test.loc[:, train.columns != 'label'], test.loc[:, ['label']]
+        train_data, train_label = train.loc[:, train.columns != "label"], None
+        test_data, test_label = (
+            test.loc[:, train.columns != "label"],
+            test.loc[:, ["label"]],
+        )
         return train_data, None, test_data, test_label
 
     def detect(self, test_data):
@@ -211,8 +341,11 @@ class AllDetectLabel(AnomalyDetect):
         data = DataPool().get_series(series_name)
         train = data
         test = data
-        train_data, train_label = train.loc[:, train.columns != 'label'], None
-        test_data, test_label = test.loc[:, train.columns != 'label'], test.loc[:, ['label']]
+        train_data, train_label = train.loc[:, train.columns != "label"], None
+        test_data, test_label = (
+            test.loc[:, train.columns != "label"],
+            test.loc[:, ["label"]],
+        )
         return train_data, None, test_data, test_label
 
     def detect(self, test_data):

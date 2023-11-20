@@ -11,7 +11,6 @@ __all__ = ["ParallelBackend"]
 
 
 class ParallelBackend(metaclass=Singleton):
-
     #: all available backends
     BACKEND_DICT = {
         "ray": RayBackend,
@@ -29,18 +28,28 @@ class ParallelBackend(metaclass=Singleton):
         n_cpus: Optional[int] = None,
         gpu_devices: Optional[List[int]] = None,
         default_timeout: float = -1,
+        max_tasks_per_child: Optional[int] = None,
     ):
         if backend not in self.BACKEND_DICT:
             raise ValueError(f"Unknown backend name {backend}")
         if self.backend is not None:
             raise RuntimeError("Please close the backend before re-initializing")
-        self.backend = self.BACKEND_DICT[backend](n_workers=n_workers, n_cpus=n_cpus, gpu_devices=gpu_devices)
+        self.backend = self.BACKEND_DICT[backend](
+            n_workers=n_workers,
+            n_cpus=n_cpus,
+            gpu_devices=gpu_devices,
+            max_tasks_per_child=max_tasks_per_child,
+        )
         self.backend.init()
         self.default_timeout = default_timeout
 
-    def schedule(self, fn: Callable, args: Tuple, timeout: Optional[float] = None) -> TaskResult:
+    def schedule(
+        self, fn: Callable, args: Tuple, timeout: Optional[float] = None
+    ) -> TaskResult:
         if self.backend is None:
-            raise RuntimeError("Please initialize parallel backend before calling schedule")
+            raise RuntimeError(
+                "Please initialize parallel backend before calling schedule"
+            )
         if timeout is None:
             timeout = self.default_timeout
         return self.backend.schedule(fn, args, timeout)

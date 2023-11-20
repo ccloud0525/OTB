@@ -20,6 +20,7 @@ from ts_benchmark.report import report_dash, report_csv
 from ts_benchmark.common.constant import CONFIG_PATH
 from ts_benchmark.pipeline import pipeline
 from ts_benchmark.utils.parallel import ParallelBackend
+from ts_benchmark.utils.random_utils import fix_random_seed
 
 warnings.filterwarnings("ignore")
 
@@ -28,6 +29,7 @@ if __name__ == "__main__":
         description="run_benchmark",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    # fix_random_seed()
 
     # script name
     parser.add_argument(
@@ -43,6 +45,13 @@ if __name__ == "__main__":
             "unfixed_detect_label_config.json",
             "all_detect_score_config.json",
             "all_detect_label_config.json",
+            "fixed_forecast_config_daily.json",
+            "fixed_forecast_config_monthly.json",
+            "fixed_forecast_config_other.json",
+            "fixed_forecast_config_quarterly.json",
+            "fixed_forecast_config_weekly.json",
+            "fixed_forecast_config_yearly.json",
+            "fixed_forecast_config_hourly.json"
         ],
         help="evaluation config file path",
     )
@@ -166,6 +175,13 @@ if __name__ == "__main__":
         help="Presentation form of algorithm performance comparison results",
     )
 
+    parser.add_argument(
+        "--saved-path",
+        type=str,
+        default=None,
+        help="saved-path",
+    )
+
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -174,7 +190,7 @@ if __name__ == "__main__":
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-
+    torch.set_num_threads(3)
     with open(os.path.join(CONFIG_PATH, args.config_path), "r") as file:
         config_data = json.load(file)
 
@@ -241,6 +257,7 @@ if __name__ == "__main__":
 
     report_config = config_data["report_config"]
     report_config["aggregate_type"] = args.aggregate_type
+    report_config["saved_path"] = args.saved_path
 
     ParallelBackend().init(
         backend=args.eval_backend,
@@ -248,9 +265,26 @@ if __name__ == "__main__":
         n_cpus=args.num_cpus,
         gpu_devices=args.gpus,
         default_timeout=args.timeout,
+        max_tasks_per_child=5,
     )
+    # try:
+    #     log_filenames = pipeline(data_loader_config, model_config, model_eval_config)
+    # finally:
+    #     ParallelBackend().close(force=True)
+    #
+    # report_config["log_files_list"] = log_filenames
+    # if args.report_method == "dash":
+    #     report_dash.report(report_config)
+    # elif args.report_method == "csv":
+    #     # report_config["leaderboard_file_name"] = "test_report.csv"
+    #     filename = get_log_file_name()
+    #     leaderboard_file_name = "test_report" + filename
+    #     # report_config["leaderboard_file_name"] = "test_report.csv"
+    #     report_config["leaderboard_file_name"] = leaderboard_file_name
+    #     report_csv.report(report_config)
     try:
-        log_filenames = pipeline(data_loader_config, model_config, model_eval_config)
+        log_filenames = pipeline(data_loader_config, model_config, model_eval_config, report_config["saved_path"])
+
     finally:
         ParallelBackend().close(force=True)
 

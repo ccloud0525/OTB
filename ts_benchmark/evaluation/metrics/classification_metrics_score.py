@@ -3,8 +3,7 @@
 import numpy as np
 from sklearn import metrics
 from ts_benchmark.evaluation.metrics.vus_metrics import metricor, generate_curve
-from ts_benchmark.evaluation.metrics.utils import get_list_anomaly
-
+from ts_benchmark.evaluation.metrics.utils import get_list_anomaly, find_length
 
 __all__ = ["auc_roc", "auc_pr", "R_AUC_ROC", "R_AUC_PR", "VUS_ROC", "VUS_PR"]
 
@@ -22,6 +21,7 @@ def auc_pr(actual: np.ndarray, predicted: np.ndarray, **kwargs):
 
 def R_AUC_ROC(actual: np.ndarray, predicted: np.ndarray, **kwargs):
     slidingWindow = int(np.median(get_list_anomaly(actual)))
+    slidingWindow = 100
     R_AUC_ROC, R_AUC_PR, _, _, _ = metricor_grader.RangeAUC(
         labels=actual, score=predicted, window=slidingWindow, plot_ROC=True
     )
@@ -30,6 +30,7 @@ def R_AUC_ROC(actual: np.ndarray, predicted: np.ndarray, **kwargs):
 
 def R_AUC_PR(actual: np.ndarray, predicted: np.ndarray, **kwargs):
     slidingWindow = int(np.median(get_list_anomaly(actual)))
+    slidingWindow = 100
     R_AUC_ROC, R_AUC_PR, _, _, _ = metricor_grader.RangeAUC(
         labels=actual, score=predicted, window=slidingWindow, plot_ROC=True
     )
@@ -38,6 +39,8 @@ def R_AUC_PR(actual: np.ndarray, predicted: np.ndarray, **kwargs):
 
 def VUS_ROC(actual: np.ndarray, predicted: np.ndarray, **kwargs):
     slidingWindow = int(np.median(get_list_anomaly(actual)))
+    slidingWindow = 100
+
     _, _, _, _, _, _, VUS_ROC, VUS_PR = generate_curve(
         actual, predicted, 2 * slidingWindow
     )
@@ -46,11 +49,21 @@ def VUS_ROC(actual: np.ndarray, predicted: np.ndarray, **kwargs):
 
 def VUS_PR(actual: np.ndarray, predicted: np.ndarray, **kwargs):
     slidingWindow = int(np.median(get_list_anomaly(actual)))
+    slidingWindow = 100
+
     _, _, _, _, _, _, VUS_ROC, VUS_PR = generate_curve(
         actual, predicted, 2 * slidingWindow
     )
     return VUS_PR
 
+
+# y_test = np.array([1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1])
+# pred_labels = np.array([1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 1, 1])
+# a = VUS_ROC(y_test, pred_labels)
+# b = VUS_PR(y_test, pred_labels)
+# # vus_results = get_range_vus_roc(y_test, pred_labels, 100)  # default slidingWindow = 100
+# print("VUS_ROC", a)
+# print("VUS_PR", b)
 
 #
 # import numpy as np

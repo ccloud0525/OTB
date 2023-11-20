@@ -15,6 +15,8 @@ from ts_benchmark.utils.data_processing import read_data
 
 warnings.filterwarnings("ignore")
 
+default_periods = [4, 7, 12, 24, 48, 52, 96, 144, 168, 336, 672, 1008, 1440]
+
 
 def adjust_period(period_value):
     if abs(period_value - 4) <= 1:
@@ -31,16 +33,30 @@ def adjust_period(period_value):
         period_value = 48
     if abs(period_value - 52) <= 2:
         period_value = 52
-    if abs(period_value - 96) <= 1:
+    if abs(period_value - 96) <= 10:
         period_value = 96
-    if abs(period_value - 144) <= 4:
+    if abs(period_value - 144) <= 10:
         period_value = 144
-    if abs(period_value - 168) <= 4:
+    if abs(period_value - 168) <= 10:
         period_value = 168
-    if abs(period_value - 672) <= 10:
+    if abs(period_value - 336) <= 50:
+        period_value = 336
+    if abs(period_value - 672) <= 20:
         period_value = 672
-    if abs(period_value - 720) <= 25:
+    if abs(period_value - 720) <= 20:
         period_value = 720
+    if abs(period_value - 1008) <= 100:
+        period_value = 1008
+    if abs(period_value - 1440) <= 200:
+        period_value = 1440
+    if abs(period_value - 8766) <= 500:
+        period_value = 8766
+    if abs(period_value - 10080) <= 500:
+        period_value = 10080
+    if abs(period_value - 21600) <= 2000:
+        period_value = 21600
+    if abs(period_value - 43200) <= 2000:
+        period_value = 43200
     return period_value
 
 
@@ -149,7 +165,7 @@ def extract_other_features(series_value):
     kurt = kurtosis(series_value)
 
     # 计算相对标准偏差（RSD）
-    rsd = (np.std(series_value) / np.mean(series_value)) * 100
+    rsd = abs((np.std(series_value) / np.mean(series_value)) * 100)
 
     # 计算一阶导数的标准差
     std_of_first_derivative = np.std(np.diff(series_value))
@@ -174,7 +190,6 @@ def extract_other_features(series_value):
         turning_points,
         series_in_series,
     ]
-
 
 def feature_extract(path):
     index_columns = [
@@ -211,14 +226,14 @@ def feature_extract(path):
     # limited_length_df = pd.read_csv(path, header=None, nrows=10000)
 
     original_df = read_data(path)
-    limited_length_df = read_data(path, nrows=10000)
+    limited_length_df = original_df
 
 
     series_length = [original_df.shape[0]]
     try:
         # ADF Test 原假设是非平稳， P值小于0.05时序列是平稳的， P值越小越平稳。如果p_value值比0.05小，证明有单位根，也就是说序列平稳。如果p_value比0.05大则证明非平稳。
-        # ADF_P_value = adfuller(limited_length_df.iloc[:, 0].values, autolag="AIC")[1]
-        ADF_P_value = [adfuller(limited_length_df.iloc[:, 0].values + 1e-10, autolag="AIC")[1]]
+        ADF_P_value = [adfuller(limited_length_df.iloc[:, 0].values, autolag="AIC")[1]]
+        # ADF_P_value = [adfuller(limited_length_df.iloc[:, 0].values + 1e-10, autolag="AIC")[1]]
 
         # KPSS Test 原假设是平稳的， P值小于0.05则序列是非平稳的， P值越大越平稳
         KPSS_P_value = [kpss(limited_length_df.iloc[:, 0].values, regression="c")[1]]
@@ -235,28 +250,37 @@ def feature_extract(path):
     series_value = pd.Series(series_value).astype("float")
     origin_series_value = pd.Series(origin_series_value).astype("float")
     other_features = extract_other_features(origin_series_value)
-    periods, amplitude = fftTransfer(series_value, fmin=0.015)  # 快速傅里叶变换
+    periods, amplitude = fftTransfer(series_value, fmin=0)  # 快速傅里叶变换
 
     periods_list = []
     # 按照振幅大小，保留振幅大的对应的周期值
-    for i in range(len(amplitude)):
+    for index_j in range(len(amplitude)):
         periods_list.append(
-            round(periods[amplitude.tolist().index(sorted(amplitude, reverse=True)[i])])
+            round(periods[amplitude.tolist().index(sorted(amplitude, reverse=True)[index_j])])
         )
 
     # 筛选后的列表中不包含相同的周期值（去重）且周期值大于或等于4。
-    final_periods = []
+    final_periods1 = []
     for l1 in periods_list:
+        l1 = adjust_period(l1)
+        if l1 not in final_periods1 and l1 >= 4:
+            final_periods1.append(l1)
+    periods_num = min(len(final_periods1), 3)
+    new_final_periods = final_periods1[:periods_num]
+    new_final_periods = new_final_periods + default_periods
+
+    final_periods = []
+    for l1 in new_final_periods:
         if l1 not in final_periods and l1 >= 4:
             final_periods.append(l1)
 
-    yuzhi = int((limited_length_df.shape[0] - 20) / 3)
+    yuzhi = int(series_length[0] / 3)
     if yuzhi <= 12:
         yuzhi = 12
 
     season_dict = {}
-    for i in range(min(10, len(final_periods))):
-        period_value = adjust_period(final_periods[i])
+    for index_period in range(max(13, len(final_periods))):
+        period_value = final_periods[index_period]
 
         if period_value < yuzhi:
             res = STL(limited_length_df.iloc[:, 0], period=period_value).fit()
@@ -316,9 +340,11 @@ def feature_extract(path):
     return result_frame
 
 
-dir_path = os.path.join(r"/Users/xiangfeiqiu/D/datasets/processed_data/forecast_univariate/Libra/transformational_Libra/nature")
+dir_path = os.path.join(r"/Volumes/UDisk/datasets/OTB_final_datasets/univariate_forecast")
 file_paths_list = []
 for filename in os.listdir(dir_path):
+    if filename.startswith('.'):
+        continue
     path = os.path.join(dir_path, filename)
     file_paths_list.append(path)
 
@@ -344,7 +370,7 @@ print(f"执行时间为: {execution_time} 秒")
 
 # 显示合并后的特征
 print(combined_features)
-combined_features.to_csv("/Users/xiangfeiqiu/D/datasets/processed_data/forecast_univariate/Libra/transformational_Libra/nature.csv", index=False)
+combined_features.to_csv("/Volumes/UDisk/datasets/OTB_final_datasets/self_feature_of_univariate_forecast.csv", index=False)
 
 
 # # 使用多线程并行处理文件

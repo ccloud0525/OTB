@@ -11,6 +11,7 @@ import time
 from typing import Callable, Tuple, Any, List, NoReturn, Optional, Dict, Union
 
 import ray
+import torch
 from ray import ObjectRef
 from ray.actor import ActorHandle
 from ray.exceptions import RayActorError
@@ -32,7 +33,7 @@ class RayActor:
         self._idle = True
         self._start_time = None
         sys.path.insert(0, "ts_benchmark/baselines/third_party")
-
+        torch.set_num_threads(1)
         sync_data(env["storage"])
 
     def run(self, fn: Callable, args: Tuple) -> Any:
@@ -159,10 +160,10 @@ class RayActorPool:
         #  As a temporary workaround, we are removing the limit of max_concurrency in this case,
         #  which may lead to unexpected overhead.
         max_concurrency = (
-            1000
+            100
             if sys.platform == "win32"
             and self.per_worker_resources.get("num_gpus", 0) > 0
-            else 1000
+            else 100
         )
         return self.actor_class.options(max_concurrency=max_concurrency).remote(
             self.env

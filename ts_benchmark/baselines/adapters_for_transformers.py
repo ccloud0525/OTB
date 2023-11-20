@@ -1,3 +1,5 @@
+import os.path
+
 import torch
 import torch.nn as nn
 from sklearn.preprocessing import StandardScaler
@@ -9,6 +11,7 @@ from torch import optim
 import numpy as np
 import pandas as pd
 from ts_benchmark.baselines.utils import data_provider, train_val_split
+from ..common.constant import ROOT_PATH
 
 DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "top_k": 5,
@@ -26,6 +29,8 @@ DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "num_kernels": 6,
     "factor": 1,
     "n_heads": 8,
+    "seg_len": 6,
+    "win_size": 2,
     "activation": "gelu",
     "output_attention": 0,
     "patch_len": 16,
@@ -42,6 +47,8 @@ DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "task_name": "short_term_forecast",
     "p_hidden_dims": [128, 128],
     "p_hidden_layers": 2,
+    "mem_dim": 32,
+    "conv_kernel": [12, 16],
 }
 
 
@@ -158,6 +165,8 @@ class TransformerAdapter:
         print("----------------------------------------------------------", self.model_name)
         config = self.config
 
+        dataset_info = str(train_data.shape) + str(train_data.iloc[0,0])
+
         train_data_value, valid_data = train_val_split(train_data, ratio, config.seq_len)
         self.scaler.fit(train_data_value.values)
 
@@ -187,11 +196,12 @@ class TransformerAdapter:
         # Define the loss function and optimizer
         criterion = nn.MSELoss()
         # criterion = nn.L1Loss()
+        print("mse loss")
         optimizer = optim.Adam(self.model.parameters(), lr=config.lr)
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        early_stopping = EarlyStopping(patience=config.patience)
+        self.early_stopping = EarlyStopping(patience=config.patience)
         self.model.to(device)
         # 计算可学习参数的总数
         total_params = sum(
@@ -199,6 +209,11 @@ class TransformerAdapter:
         )
 
         print(f"Total trainable parameters: {total_params}")
+        saved_str = f"{dataset_info}; {self.model_name} {str(vars(self.config))} Total trainable parameters: {total_params}\n"
+        save_log_path = os.path.join(ROOT_PATH, "result/middle_result.txt")
+        with open(save_log_path, 'a') as file:
+            file.write(saved_str)
+
 
         # print(self.model.state_dict())
 
@@ -232,9 +247,8 @@ class TransformerAdapter:
                 loss.backward()
                 optimizer.step()
             valid_loss = self.validate(valid_data_loader, criterion)
-            early_stopping(valid_loss, self.model)
-            if early_stopping.early_stop:
-                self.model.load_state_dict(early_stopping.check_point)
+            self.early_stopping(valid_loss, self.model)
+            if self.early_stopping.early_stop:
                 break
 
             adjust_learning_rate(optimizer, epoch + 1, config)
@@ -247,6 +261,9 @@ class TransformerAdapter:
         :param testdata: 用于预测的时间序列数据。
         :return: 预测结果的数组。
         """
+
+        self.model.load_state_dict(self.early_stopping.check_point)
+
         train = pd.DataFrame(self.scaler.transform(train.values), columns=train.columns,
                                               index=train.index)
 

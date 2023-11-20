@@ -106,6 +106,7 @@ class FixedForecast(Strategy):
         :param model_factory: 模型对象的构造/工厂函数。
         :return: 评估结果。
         """
+        print(series_name)
         fix_random_seed()
         model = model_factory()
         data = DataPool().get_series(series_name)
