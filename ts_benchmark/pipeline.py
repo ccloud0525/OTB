@@ -65,6 +65,7 @@ def pipeline(
     # 加载数据
     series_list = load_data(data_loader_config)
     print(series_list)
+    print(len(series_list))
     # 获取数据池实例，加载数据
     data_pool = DataPool()
     data_pool.prepare_data(series_list)

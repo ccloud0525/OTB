@@ -151,17 +151,21 @@ class TransformerAdapter:
         self.model.train()
         return total_loss
 
+
     def detect_fit(self, train_data: pd.DataFrame, test_data: pd.DataFrame):
         """
         训练模型。
 
         :param train_data: 用于训练的时间序列数据。
         """
+
         self.hyper_param_tune(train_data)
         self.model = self.model_class(self.config)
 
         config = self.config
-
+        #
+        dataset_info = str(train_data.shape) + str(train_data.iloc[0,0])
+        #
         train_data_value, valid_data = train_val_split(train_data, 0.8, None)
         self.scaler.fit(train_data_value.values)
 
@@ -208,8 +212,8 @@ class TransformerAdapter:
         )
         print(str(vars(self.config)))
         print(f"Total trainable parameters: {total_params}")
-        saved_str = f"{self.model_name} {str(vars(self.config))} Total trainable parameters: {total_params}\n"
-        save_log_path = os.path.join(ROOT_PATH, "result/middle_result.txt")
+        saved_str = f"{dataset_info}; {self.model_name} {str(vars(self.config))} Total trainable parameters: {total_params}\n"
+        save_log_path = os.path.join(ROOT_PATH, "result/ad_tslibrary.txt")
         with open(save_log_path, "a") as file:
             file.write(saved_str)
 
@@ -278,7 +282,7 @@ class TransformerAdapter:
         attens_energy = np.concatenate(attens_energy, axis=0).reshape(-1)
         test_energy = np.array(attens_energy)
 
-        return test_energy
+        return test_energy, test_energy
 
     def detect_label(self, test: pd.DataFrame) -> np.ndarray:
         """
@@ -368,9 +372,14 @@ class TransformerAdapter:
 
         attens_energy = np.concatenate(attens_energy, axis=0).reshape(-1)
         test_energy = np.array(attens_energy)
-
+        # #
+        # threshold = np.mean(test_energy) + 3 * np.std(test_energy)
+        # print("Threshold :", threshold)
+        # #
         pred = (test_energy > threshold).astype(int)
-        return pred
+        a = pred.sum() / len(test_energy) * 100
+        print(pred.sum() / len(test_energy) * 100)
+        return pred, test_energy
 
 
 def generate_model_factory(

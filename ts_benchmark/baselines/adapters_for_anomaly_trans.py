@@ -1,4 +1,5 @@
 import copy
+import os
 import time
 from typing import Type, Dict
 
@@ -10,6 +11,7 @@ from sklearn.preprocessing import StandardScaler
 
 from ts_benchmark.baselines.DCdetector.data_loader import data_provider
 from .utils import train_val_split
+from ..common.constant import ROOT_PATH
 
 DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "win_size": 100,
@@ -183,7 +185,9 @@ class TransformerAdapter:
         """
         self.config.input_c = train_data.shape[1]
         self.config.output_c = train_data.shape[1]
-
+        #
+        dataset_info = str(train_data.shape) + str(train_data.iloc[0,0])
+        #
         train_data_value, valid_data = train_val_split(train_data, 0.8, None)
         self.scaler.fit(train_data_value.values)
 
@@ -226,6 +230,10 @@ class TransformerAdapter:
             p.numel() for p in self.model.parameters() if p.requires_grad
         )
         print(f"Total trainable parameters: {total_params}")
+        saved_str = f"{dataset_info}; {self.model_name} {str(vars(self.config))} Total trainable parameters: {total_params}\n"
+        save_log_path = os.path.join(ROOT_PATH, "result/ad_anomaly_trans.txt")
+        with open(save_log_path, 'a') as file:
+            file.write(saved_str)
 
         self.early_stopping = EarlyStopping(patience=self.config.patience, verbose=True)
 
@@ -440,7 +448,7 @@ class TransformerAdapter:
         test_energy = np.array(attens_energy)
         test_labels = np.array(test_labels)
 
-        return test_energy
+        return test_energy, test_energy
 
     def detect_label(self, train: pd.DataFrame) -> np.ndarray:
         """
@@ -542,8 +550,8 @@ class TransformerAdapter:
         attens_energy = np.concatenate(attens_energy, axis=0).reshape(-1)
         test_energy = np.array(attens_energy)
         combined_energy = np.concatenate([train_energy, test_energy], axis=0)
-        # thresh = np.percentile(combined_energy, 100 - self.config.anormly_ratio)
-        thresh = np.mean(combined_energy) + 3 * np.std(combined_energy)
+        thresh = np.percentile(combined_energy, 100 - self.config.anormly_ratio)
+        # thresh = np.mean(combined_energy) + 3 * np.std(combined_energy)
         print("Threshold :", thresh)
 
         # (3) evaluation on the test set
@@ -621,8 +629,9 @@ class TransformerAdapter:
         test_labels = np.array(test_labels)
 
         pred = (test_energy > thresh).astype(int)
-
-        return pred
+        a = pred.sum() / len(test_energy) * 100
+        print(pred.sum() / len(test_energy) * 100)
+        return pred, test_energy
 
 
 def generate_model_factory(

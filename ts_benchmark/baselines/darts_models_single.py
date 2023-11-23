@@ -489,19 +489,20 @@ class DartsModelAdapter:
 
         if self.model_name == "VARIMA":
             self.model = self.model_class(**self.model_args)
-            self.scaler.fit(series.values)
-            train_data_value = pd.DataFrame(self.scaler.transform(series.values),
-                                            columns=series.columns,
-                                            index=series.index)
-            train_data = TimeSeries.from_dataframe(train_data_value)
-
+            # self.scaler.fit(series.values)
+            # train_data_value = pd.DataFrame(self.scaler.transform(series.values),
+            #                                 columns=series.columns,
+            #                                 index=series.index)
+            # train_data = TimeSeries.from_dataframe(train_data_value)
+            train_data = series
             return self.model.fit(train_data)
         else:
-            self.scaler.fit(series.values)
-            train_data_value = pd.DataFrame(self.scaler.transform(series.values),
-                                            columns=series.columns,
-                                            index=series.index)
+            # self.scaler.fit(series.values)
+            # train_data_value = pd.DataFrame(self.scaler.transform(series.values),
+            #                                 columns=series.columns,
+            #                                 index=series.index)
 
+            train_data_value = series
             self.model = self.model_class(**self.model_args)
             train_data = TimeSeries.from_dataframe(train_data_value)
 
@@ -517,15 +518,15 @@ class DartsModelAdapter:
         :param train: 用于拟合模型的训练数据。
         :return: 预测结果。
         """
-        train = pd.DataFrame(self.scaler.transform(train.values), columns=train.columns,
-                                              index=train.index)
+        # train = pd.DataFrame(self.scaler.transform(train.values), columns=train.columns,
+        #                                       index=train.index)
         if self.allow_fit_on_eval:
             fsct_result = self.model.predict(pred_len)
         else:
             train = TimeSeries.from_dataframe(train)
             fsct_result = self.model.predict(pred_len, train)
         predict = fsct_result.values()
-        predict = self.scaler.inverse_transform(predict)
+        # predict = self.scaler.inverse_transform(predict)
 
         return predict
 

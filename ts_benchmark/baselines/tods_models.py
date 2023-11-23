@@ -132,7 +132,7 @@ class TodsModelAdapter:
         # self.model.fit(X)
         prediction_score = self.model.predict_score(X).reshape(-1)
 
-        return prediction_score
+        return prediction_score, prediction_score
 
     def detect_label(self, train: pd.DataFrame) -> np.ndarray:
         """
@@ -147,7 +147,7 @@ class TodsModelAdapter:
         # self.model.fit(X)
         prediction_labels = self.model.predict(X).reshape(-1)
 
-        return prediction_labels
+        return prediction_labels, prediction_labels
 
     def __repr__(self):
         """

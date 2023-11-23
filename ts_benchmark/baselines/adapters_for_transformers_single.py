@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.nn as nn
 from sklearn.preprocessing import StandardScaler
@@ -9,6 +11,7 @@ from torch import optim
 import numpy as np
 import pandas as pd
 from ts_benchmark.baselines.utils import data_provider, train_val_split
+from ..common.constant import ROOT_PATH
 
 DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "top_k": 5,
@@ -26,6 +29,8 @@ DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "num_kernels": 6,
     "factor": 1,
     "n_heads": 8,
+    "seg_len": 6,
+    "win_size": 2,
     "activation": "gelu",
     "output_attention": 0,
     "patch_len": 4,
@@ -43,6 +48,8 @@ DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "p_hidden_dims": [128, 128],
     "p_hidden_layers": 2,
     "mem_dim": 32,
+    "conv_kernel": [12, 16],
+
 }
 
 
@@ -92,10 +99,12 @@ class TransformerAdapter_single:
         self.config.dec_in = column_num
         self.config.c_out = column_num
 
-        if self.model_name == "MICN":
-            setattr(self.config, "label_len", self.config.seq_len)
-        else:
-            setattr(self.config, "label_len", self.config.seq_len // 2)
+        # if self.model_name == "MICN":
+        #     setattr(self.config, "label_len", self.config.seq_len)
+        # else:
+        #     setattr(self.config, "label_len", self.config.seq_len // 2)
+
+        setattr(self.config, "label_len", self.config.pred_len)
 
     def padding_data_for_forecast(self, test):
         time_column_data = test.index
@@ -128,11 +137,14 @@ class TransformerAdapter_single:
         self.model = self.model_class(self.config)
         print("----------------------------------------------------------", self.model_name)
         config = self.config
-
-        self.scaler.fit(train_data.values)
-
-        train_data_value = pd.DataFrame(self.scaler.transform(train_data.values), columns=train_data.columns,
-                                              index=train_data.index)
+        #
+        dataset_info = str(train_data.shape) + str(train_data.iloc[0,0])
+        #
+        # self.scaler.fit(train_data.values)
+        #
+        # train_data_value = pd.DataFrame(self.scaler.transform(train_data.values), columns=train_data.columns,
+        #                                       index=train_data.index)
+        train_data_value = train_data
 
         train_dataset, train_data_loader = data_provider(
             train_data_value,
@@ -157,7 +169,10 @@ class TransformerAdapter_single:
         )
 
         print(f"Total trainable parameters: {total_params}")
-
+        saved_str = f"{dataset_info}; {self.model_name} {str(vars(self.config))} Total trainable parameters: {total_params}\n"
+        save_log_path = os.path.join(ROOT_PATH, "result/univariate_forecast.txt")
+        with open(save_log_path, 'a') as file:
+            file.write(saved_str)
         # print(self.model.state_dict())
 
         for epoch in range(config.num_epochs):
@@ -200,9 +215,9 @@ class TransformerAdapter_single:
         :param testdata: 用于预测的时间序列数据。
         :return: 预测结果的数组。
         """
-        train = pd.DataFrame(self.scaler.transform(train.values), columns=train.columns,
-                                              index=train.index)
 
+        # train = pd.DataFrame(self.scaler.transform(train.values), columns=train.columns,
+        #                                       index=train.index)
         if self.model is None:
             raise ValueError("Model not trained. Call the fit() function first.")
 
@@ -251,7 +266,7 @@ class TransformerAdapter_single:
                     answer = np.concatenate([answer, temp], axis=0)
 
                 if answer.shape[0] >= pred_len:
-                    answer[-pred_len:] = self.scaler.inverse_transform(answer[-pred_len:])
+                    # answer[-pred_len:] = self.scaler.inverse_transform(answer[-pred_len:])
                     return answer[-pred_len:]
 
                 output = output.cpu().numpy()[:, -config.pred_len :, :]

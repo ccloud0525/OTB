@@ -150,6 +150,10 @@ class FixedForecast(Strategy):
                 transformed_actual, transformed_predict, train.values
             )
 
+            # 对于单变量而言不需要归一化
+            transformed_single_series_result = single_series_results
+            # 对于单变量而言不需要归一化
+
             single_series_results = [
                 str(f"{a};{b}")
                 for a, b in zip(

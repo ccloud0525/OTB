@@ -4,6 +4,7 @@ import pickle
 import time
 import traceback
 from typing import List, Any
+from sklearn.metrics import accuracy_score
 
 import numpy as np
 import pandas as pd
@@ -121,8 +122,11 @@ class AnomalyDetect(Strategy):
                 self.model.fit(train_data, train_label)  # 在训练数据上拟合模型
 
             end_fit_time = time.time()
-            predict_label = self.detect(test_data)
+            predict_label, another = self.detect(test_data)
             actual_label = test_label.to_numpy().flatten()
+            end_inference_time = time.time()
+
+
 
             # if self.model.win_size is not None:
             #     actual_label1 = actual_label[
@@ -147,8 +151,13 @@ class AnomalyDetect(Strategy):
                     mode="constant",
                     constant_values=0,
                 )
+                another = np.pad(
+                    another,
+                    (0, remaining_length),
+                    mode="constant",
+                    constant_values=0,
+                )
 
-            end_inference_time = time.time()
             single_series_results, log_info = self.evaluator.evaluate_with_log(
                 actual_label.astype(float),
                 predict_label.astype(float),
@@ -161,9 +170,10 @@ class AnomalyDetect(Strategy):
                 for a, b in zip(single_series_results, single_series_results)
             ]
 
-            inference_data = pd.DataFrame(
-                predict_label, columns=test_label.columns, index=test_label.index
-            )
+            # inference_data = pd.DataFrame(
+            #     predict_label, columns=test_label.columns, index=test_label.index
+            # )
+            inference_data = [predict_label, another]
             actual_data_pickle = pickle.dumps(test_label)
             # 使用 base64 进行编码
             actual_data_pickle = base64.b64encode(actual_data_pickle).decode("utf-8")

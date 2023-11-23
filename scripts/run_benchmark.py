@@ -244,8 +244,20 @@ if __name__ == "__main__":
             }
         )
 
+
+
     model_eval_config = config_data["model_eval_config"]
-    model_eval_config["metric_name"] = args.metric_name
+
+    metric_list = []
+    if args.metric_name != 'all':
+        for metric in args.metric_name:
+            metric_name = json.loads(metric)
+            metric_list.append(metric_name)
+        model_eval_config["metric_name"] = metric_list
+    else:
+         model_eval_config["metric_name"] = args.metric_name
+
+
     default_strategy_args = model_eval_config["strategy_args"]
     specific_strategy_args = (
         json.loads(args.strategy_args) if args.strategy_args else None
