@@ -1,0 +1,1 @@
+python ./scripts/run_benchmark.py --config-path "unfixed_detect_label_config.json" --data-set-name "small_detect" --typical-data-name-list "PSM.csv" --model-name "merlion_models.merlion_autoencoder"  --model-hyper-params "{\"lr\":1e-2}" --report-method csv --gpus 0 --num-workers 1 --saved-path "bb"

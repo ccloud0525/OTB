@@ -59,7 +59,14 @@ def report(report_config: dict) -> None:
     leaderboard_df.insert(0, 'strategy_args', [log_data.iloc[0, 1]] * num_rows)
 
     # Create final DataFrame and save to CSV
-    leaderboard_df.to_csv(
-        os.path.join(ROOT_PATH, "result", report_config["leaderboard_file_name"]),
-        index=False,
-    )
+    if report_config.get('saved_path', None) is not None:
+        saved_path = report_config.get('saved_path', None)
+        leaderboard_df.to_csv(
+            os.path.join(ROOT_PATH, "result", saved_path, report_config["leaderboard_file_name"]),
+            index=False,
+        )
+    else:
+        leaderboard_df.to_csv(
+            os.path.join(ROOT_PATH, "result", report_config["leaderboard_file_name"]),
+            index=False,
+        )

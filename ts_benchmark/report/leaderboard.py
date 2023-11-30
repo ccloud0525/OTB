@@ -125,7 +125,7 @@ def filter_data_and_calculate_result(
     selected_df["model_and_params"] = (
         selected_df["model_name"] + ";" + selected_df["model_params"]
     )
-
+    # todo:inf,-inf应该变成null
     metric_df = selected_df[[metric_name, "model_and_params", "file_name"]].pivot_table(
         values=metric_name,
         index="file_name",

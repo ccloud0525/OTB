@@ -892,7 +892,9 @@ def ray_tsb_uad_univariate():
             filename,
         )
         root_path = (
-            "/Users/xiangfeiqiu/D/datasets/processed_data/ad_univariate/tsb_uad/"
+
+            "/Users/xiangfeiqiu/D/datasets/processed_data/ad_univariate/tsb_uad"
+
         )
 
         try:

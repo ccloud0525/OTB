@@ -36,7 +36,9 @@ class Triformer(nn.Module):
         self.horizon = configs.pred_len
         self.lag = configs.seq_len
 
-        configs.patch_sizes = prime_factors(self.horizon)
+
+        configs.patch_sizes = prime_factors(self.lag)
+
 
         cuts = self.lag
         for patch_size in configs.patch_sizes:
@@ -341,4 +343,6 @@ class WeightGenerator(nn.Module):
             ]
             return weights, bias
         else:
+
             return self.P, self.B
+

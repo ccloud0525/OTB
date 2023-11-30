@@ -11,8 +11,13 @@ class MIC(nn.Module):
     MIC layer to extract local and global features
     """
 
+<<<<<<< HEAD
     def __init__(self, feature_size=512, n_heads=8, dropout=0.05, decomp_kernel=[32], conv_kernel=[24],
                  isometric_kernel=[18, 6], device='cuda'):
+=======
+    def __init__(self, feature_size=512, n_heads=8, dropout=0.05, decomp_kernel=[17, 49], conv_kernel=[12, 16],
+                 isometric_kernel=[17, 49], device='cuda'):
+>>>>>>> remotes/origin/qxf_dev
         super(MIC, self).__init__()
         self.conv_kernel = conv_kernel
         self.device = device
@@ -114,7 +119,7 @@ class MICN(nn.Module):
         conv_kernel: downsampling and upsampling convolution kernel_size
         """
         super(MICN, self).__init__()
-
+        conv_kernel = configs.conv_kernel
         decomp_kernel = []  # kernel of decomposition operation
         isometric_kernel = []  # kernel of isometric convolution
         for ii in conv_kernel:

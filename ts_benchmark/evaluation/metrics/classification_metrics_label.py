@@ -2,12 +2,18 @@
 
 import numpy as np
 from sklearn import metrics
+
+from ts_benchmark.evaluation.metrics.affiliation.generics import convert_vector_to_events
+from ts_benchmark.evaluation.metrics.affiliation.metrics import pr_from_events
 from ts_benchmark.evaluation.metrics.vus_metrics import metricor
+from sklearn.metrics import accuracy_score
 
 __all__ = [
+    "accuracy",
     "f_score",
     "precision",
     "recall",
+    "adjust_accuracy",
     "adjust_f_score",
     "adjust_precision",
     "adjust_recall",
@@ -15,6 +21,9 @@ __all__ = [
     "rprecision",
     "precision_at_k",
     "rf",
+    "affiliation_f",
+    "affiliation_precision",
+    "affiliation_recall",
 ]
 
 
@@ -63,6 +72,7 @@ def adjust_predicts(actual: np.ndarray, predicted: np.ndarray, **kwargs) -> np.n
 #####改，参考merlion
 
 
+
 def adjust_precision(actual: np.ndarray, predicted: np.ndarray, **kwargs):
     predicted = adjust_predicts(actual, predicted)
     Precision, Recall, F, Support = metrics.precision_recall_fscore_support(
@@ -87,6 +97,12 @@ def adjust_f_score(actual: np.ndarray, predicted: np.ndarray, **kwargs):
     return F[1]
 
 
+def adjust_accuracy(actual: np.ndarray, predicted: np.ndarray, **kwargs):
+    predicted = adjust_predicts(actual, predicted)
+    accuracy = accuracy_score(actual, predicted)
+    return accuracy
+
+
 def precision(actual: np.ndarray, predicted: np.ndarray, **kwargs):
     Precision, Recall, F, Support = metrics.precision_recall_fscore_support(
         actual, predicted, zero_division=0
@@ -106,6 +122,11 @@ def f_score(actual: np.ndarray, predicted: np.ndarray, **kwargs):
         actual, predicted, zero_division=0
     )
     return F[1]
+
+
+def accuracy(actual: np.ndarray, predicted: np.ndarray, **kwargs):
+    accuracy = accuracy_score(actual, predicted)
+    return accuracy
 
 
 def rrecall(actual: np.ndarray, predicted: np.ndarray, **kwargs):
@@ -170,6 +191,41 @@ def precision_at_k(actual: np.ndarray, predicted: np.ndarray, **kwargs):
         Precision_at_k,
     ) = metricor_grader.metric_new(actual, predicted, plot_ROC=False)
     return Precision_at_k
+
+def affiliation_f(actual: np.ndarray, predicted: np.ndarray, **kwargs):
+    events_pred = convert_vector_to_events(predicted)
+    events_label = convert_vector_to_events(actual)
+    Trange = (0, len(predicted))
+
+    result = pr_from_events(events_pred, events_label, Trange)
+    P = result['precision']
+    R = result['recall']
+    F = 2 * P * R / (P + R)
+
+    return F
+def affiliation_precision(actual: np.ndarray, predicted: np.ndarray, **kwargs):
+    events_pred = convert_vector_to_events(predicted)
+    events_label = convert_vector_to_events(actual)
+    Trange = (0, len(predicted))
+
+    result = pr_from_events(events_pred, events_label, Trange)
+    P = result['precision']
+    R = result['recall']
+    F = 2 * P * R / (P + R)
+
+    return P
+
+def affiliation_recall(actual: np.ndarray, predicted: np.ndarray, **kwargs):
+    events_pred = convert_vector_to_events(predicted)
+    events_label = convert_vector_to_events(actual)
+    Trange = (0, len(predicted))
+
+    result = pr_from_events(events_pred, events_label, Trange)
+    P = result['precision']
+    R = result['recall']
+    F = 2 * P * R / (P + R)
+
+    return R
 
 
 # score = np.array([0, 0, 0, 0, 1, 1, 1, 1])

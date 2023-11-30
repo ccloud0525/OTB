@@ -1,3 +1,4 @@
+import copy
 import os
 
 import numpy as np
@@ -53,7 +54,8 @@ class EarlyStopping:
         print(
             f"Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ..."
         )
-        self.check_point = model.state_dict()
+        self.check_point = copy.deepcopy(model.state_dict())
+        # self.check_point = model.state_dict()
         self.val_loss_min = val_loss
 
 

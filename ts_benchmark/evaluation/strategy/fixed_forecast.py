@@ -106,6 +106,8 @@ class FixedForecast(Strategy):
         :param model_factory: 模型对象的构造/工厂函数。
         :return: 评估结果。
         """
+
+        print(series_name)
         fix_random_seed()
         model = model_factory()
         data = DataPool().get_series(series_name)
@@ -149,8 +151,14 @@ class FixedForecast(Strategy):
                 transformed_actual, transformed_predict, train.values
             )
 
+
+            # 对于单变量而言不需要归一化
+            transformed_single_series_result = single_series_results
+            # 对于单变量而言不需要归一化
+
             single_series_results = [
-                f"{a};{b}"
+                str(f"{a};{b}")
+
                 for a, b in zip(
                     single_series_results, transformed_single_series_result
                 )

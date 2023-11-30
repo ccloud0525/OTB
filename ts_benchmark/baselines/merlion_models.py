@@ -33,6 +33,9 @@ from merlion.models.anomaly.forecast_based.arima import (
 from merlion.models.anomaly.forecast_based.ets import ETSDetector, ETSDetectorConfig
 from merlion.models.anomaly.forecast_based.mses import MSESDetector, MSESDetectorConfig
 
+from ts_benchmark.baselines.utils import train_val_split
+from sklearn.preprocessing import StandardScaler
+
 
 class MerlionModelAdapter:
     """
@@ -61,7 +64,22 @@ class MerlionModelAdapter:
         self.config_class = config_class
         self.model_args = model_args
         self.model_name = model_name
+        self.scaler = StandardScaler()
         self.allow_label_on_train = allow_label_on_train
+
+    # def convert(self, ori_data):
+    #     np.random.seed(2021)
+    #     for id, data in enumerate(ori_data):
+    #         r = 0.02
+    #         # r = 0.02, 0.05, 0.1
+    #         flag = 1 if np.random.rand() < 0.5 else -1
+    #         m = flag * 100 * (3 + np.random.randn(*data.shape))
+    #         mask = np.random.rand(*m.shape) < r
+    #         m = mask * m
+    #         ori_data[id] += m
+    #     print(f'-------------------------------------------r的值为：{r}')
+    #
+    #     return ori_data
 
     def detect_fit(self, series: pd.DataFrame, label: pd.DataFrame) -> object:
         """
@@ -71,14 +89,25 @@ class MerlionModelAdapter:
         :param label: 标签数据。
         :return: 拟合后的模型对象。
         """
+        # series = pd.DataFrame(self.convert(series.values), columns=series.columns, index=series.index)
+
+        # train_data_value, valid_data = train_val_split(series, 0.8, None)
+        # self.scaler.fit(series.values)
+
+        # series = pd.DataFrame(
+        #     self.scaler.transform(series.values),
+        #     columns=series.columns,
+        #     index=series.index,
+        # )
+
         config_obj = self.config_class(**self.model_args)
         self.model = self.model_class(config_obj)
         series = TimeSeries.from_pd(series)
         label = TimeSeries.from_pd(label)
-        if self.allow_label_on_train:
-            return self.model.train(train_data=series, anomaly_labels=label)
-        else:
-            return self.model.train(series)
+        # if self.allow_label_on_train:
+        #     return self.model.train(train_data=series, anomaly_labels=label)
+        # else:
+        return self.model.train(series)
 
     def detect_score(self, train: pd.DataFrame) -> np.ndarray:
         """
@@ -94,7 +123,7 @@ class MerlionModelAdapter:
 
         fsct_result = fsct_result.values.flatten()
 
-        return fsct_result
+        return fsct_result, fsct_result
 
     def detect_label(self, train: pd.DataFrame) -> np.ndarray:
         """
@@ -112,7 +141,20 @@ class MerlionModelAdapter:
 
         fsct_result = fsct_result.values.flatten()
 
-        return fsct_result
+        return fsct_result, fsct_result
+
+        # train = TimeSeries.from_pd(train)
+        # fsct_result = self.model.get_anomaly_score(train)
+        #
+        # fsct_result = (fsct_result.to_pd()).reindex((train.to_pd()).index, fill_value=0)
+        #
+        # fsct_result = fsct_result.values.flatten()
+        # thresh = np.percentile(fsct_result, 100 - 1)
+        # print(thresh)
+        # pred = (fsct_result > thresh).astype(int)
+        # a = pred.sum() / len(fsct_result) * 100
+        # print(pred.sum() / len(fsct_result) * 100)
+        # return pred, fsct_result
 
     def __repr__(self):
         """

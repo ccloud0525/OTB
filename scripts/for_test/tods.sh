@@ -1,0 +1,1 @@
+python ./scripts/run_benchmark.py --config-path "unfixed_detect_score_config.json" --data-set-name "small_detect" --typical-data-name-list "YahooA3Benchmark-TS40_data.csv"  --model-name "tods_models.tods_autoencoderski"  --report-method csv --gpus 0  --num-workers 1 --saved-path "tods_test"

@@ -96,6 +96,7 @@ class RollingForecast(Strategy):
             # ----------------------------------------------------------------------------------可以删除
             train_data1, rest1 = split_before(train_data, int(train_length * SPLIT_DICT.get(series_name, 0.875)))
             self.scaler.fit(train_data1.values)
+
             all_test_results1 = []
             # ----------------------------------------------------------------------------------可以删除
             start_fit_time = time.time()
@@ -170,12 +171,20 @@ class RollingForecast(Strategy):
                 all_rolling_predict_pickle
             ).decode("utf-8")
 
+            # single_series_results += [
+            #     series_name,
+            #     end_fit_time - start_fit_time,
+            #     average_inference_time,
+            #     all_rolling_actual_pickle,
+            #     all_rolling_predict_pickle,
+            #     "",
+            # ]
             single_series_results += [
                 series_name,
                 end_fit_time - start_fit_time,
                 average_inference_time,
-                all_rolling_actual_pickle,
-                all_rolling_predict_pickle,
+                np.nan,
+                np.nan,
                 "",
             ]
         except Exception as e:
@@ -185,6 +194,242 @@ class RollingForecast(Strategy):
             )
 
         return single_series_results
+    # def execute(self, series_name: str, model_factory: ModelFactory) -> Any:
+    #     """
+    #     执行滚动预测策略。
+    #
+    #     :param series_name: 要执行预测的序列名称。
+    #     :param model_factory: 模型对象的构造/工厂函数。
+    #     :return: 评估结果的平均值。
+    #     """
+    #     fix_random_seed()
+    #     model = model_factory()
+    #
+    #     data = DataPool().get_series(series_name)
+    #     self.data_lens = int(
+    #         DataPool().get_series_meta_info(series_name)["length"].item()
+    #     )
+    #     # self.data_lens = len(data)
+    #     try:
+    #         all_test_results = []
+    #
+    #         train_length = int(
+    #             self.strategy_config["train_test_split"] * self.data_lens
+    #         )
+    #         test_length = self.data_lens - train_length
+    #         if train_length <= 0 or test_length <= 0:
+    #             raise ValueError(
+    #                 "The length of training or testing data is less than or equal to 0"
+    #             )
+    #         train_data, other = split_before(data, train_length)  # 分割训练数据
+    #         # ----------------------------------------------------------------------------------可以删除
+    #         train_data1, rest1 = split_before(train_data, int(train_length * SPLIT_DICT.get(series_name, 0.875)))
+    #         self.scaler.fit(train_data1.values)
+    #         all_test_results1 = []
+    #         # ----------------------------------------------------------------------------------可以删除
+    #         start_fit_time = time.time()
+    #         if hasattr(model, "forecast_fit"):
+    #             model.forecast_fit(train_data, SPLIT_DICT.get(series_name, 0.875))  # 在训练数据上拟合模型
+    #         else:
+    #             model.fit(train_data, SPLIT_DICT.get(series_name, 0.875))  # 在训练数据上拟合模型
+    #         end_fit_time = time.time()
+    #         index_list = self._get_index(test_length, train_length)  # 获取滚动窗口的索引列表
+    #         total_inference_time = 0
+    #         all_rolling_actual = []
+    #         all_rolling_predict = []
+    #         predict_list = []
+    #         actual_list = []
+    #         transformed_actual_list = []
+    #         transformed_predict_list = []
+    #         for i in range(min(len(index_list), self.num_rollings)):
+    #             index = index_list[i]
+    #             train, other = split_before(data, index)  # 分割训练数据
+    #             test, rest = split_before(other, self.pred_len)  # 分割测试数据
+    #             start_inference_time = time.time()
+    #             predict = model.forecast(self.pred_len, train)  # 预测未来数据
+    #             end_inference_time = time.time()
+    #             total_inference_time += end_inference_time - start_inference_time
+    #
+    #             actual = test.to_numpy()
+    #             predict_list.append(predict)
+    #             actual_list.append(actual)
+    #
+    #             # ----------------------------------------------------------------------------------可以删除
+    #             transformed_predict = self.scaler.transform(predict)
+    #             transformed_actual = pd.DataFrame(
+    #                 self.scaler.transform(test.values),
+    #                 columns=test.columns,
+    #                 index=test.index,
+    #             ).to_numpy()
+    #             transformed_actual_list.append(transformed_actual)
+    #             transformed_predict_list.append(transformed_predict)
+    #
+    #             # ----------------------------------------------------------------------------------可以删除
+    #         average_inference_time = float(total_inference_time) / min(
+    #             len(index_list), self.num_rollings
+    #         )
+    #         preds = np.array(predict_list)
+    #         trues = np.array(actual_list)
+    #         preds = preds.reshape(-1, preds.shape[-2], preds.shape[-1])
+    #         trues = trues.reshape(-1, trues.shape[-2], trues.shape[-1])
+    #         single_series_result = self.evaluator.evaluate(  # 计算评价指标
+    #             trues, preds, train_data.values
+    #         )
+    #
+    #         preds1 = np.array(transformed_predict_list)
+    #         trues1 = np.array(transformed_actual_list)
+    #         preds1 = preds1.reshape(-1, preds1.shape[-2], preds1.shape[-1])
+    #         trues1 = trues1.reshape(-1, trues1.shape[-2], trues1.shape[-1])
+    #         single_series_result1 = self.evaluator.evaluate(  # 计算评价指标
+    #             trues1, preds1, train_data.values
+    #         )
+    #
+    #         single_series_results = [
+    #             f"{a};{b}"
+    #             for a, b in zip(
+    #                 single_series_result, single_series_result1
+    #             )
+    #         ]
+    #         # ----------------------------------------------------------------------------------可以删除
+    #         all_rolling_actual_pickle = pickle.dumps(all_rolling_actual)
+    #         # 使用 base64 进行编码
+    #         all_rolling_actual_pickle = base64.b64encode(
+    #             all_rolling_actual_pickle
+    #         ).decode("utf-8")
+    #
+    #         all_rolling_predict_pickle = pickle.dumps(all_rolling_predict)
+    #         # 使用 base64 进行编码
+    #         all_rolling_predict_pickle = base64.b64encode(
+    #             all_rolling_predict_pickle
+    #         ).decode("utf-8")
+    #
+    #         # single_series_results += [
+    #         #     series_name,
+    #         #     end_fit_time - start_fit_time,
+    #         #     average_inference_time,
+    #         #     all_rolling_actual_pickle,
+    #         #     all_rolling_predict_pickle,
+    #         #     "",
+    #         # ]
+    #         single_series_results += [
+    #             series_name,
+    #             end_fit_time - start_fit_time,
+    #             average_inference_time,
+    #             np.nan,
+    #             np.nan,
+    #             "",
+    #         ]
+    #     except Exception as e:
+    #         log = f"{traceback.format_exc()}\n{e}"
+    #         single_series_results = self.get_default_result(
+    #             **{FieldNames.LOG_INFO: log}
+    #         )
+    #
+    #     return single_series_results
+    # def execute(self, series_name: str, model_factory: ModelFactory) -> Any:
+    #     """
+    #     执行滚动预测策略。
+    #
+    #     :param series_name: 要执行预测的序列名称。
+    #     :param model_factory: 模型对象的构造/工厂函数。
+    #     :return: 评估结果的平均值。
+    #     """
+    #     fix_random_seed()
+    #
+    #     model = model_factory()
+    #
+    #     data = DataPool().get_series(series_name)
+    #     self.data_lens = int(DataPool().get_series_meta_info(series_name)["length"].item())
+    #     # self.data_lens = len(data)
+    #     try:
+    #         all_test_results = []
+    #
+    #         train_length = int(
+    #             self.strategy_config["train_test_split"]
+    #             * self.data_lens
+    #         )
+    #         test_length = self.data_lens - train_length
+    #         if train_length <= 0 or test_length <= 0:
+    #             raise ValueError(
+    #                 "The length of training or testing data is less than or equal to 0"
+    #             )
+    #         train_data, other = split_before(data, train_length)  # 分割训练数据
+    #         # self.scaler.fit(train_data.values)
+    #
+    #         train_data1, rest1 = split_before(train_data, int(train_length * 0.75))
+    #         self.scaler.fit(train_data1.values)
+    #
+    #         train_data_transformed = pd.DataFrame(self.scaler.transform(train_data.values), columns=train_data.columns, index=train_data.index)
+    #
+    #         start_fit_time = time.time()
+    #         if hasattr(model, "forecast_fit"):
+    #             model.forecast_fit(train_data_transformed)  # 在训练数据上拟合模型
+    #         else:
+    #             model.fit(train_data_transformed, 0.75)  # 在训练数据上拟合模型
+    #         end_fit_time = time.time()
+    #         index_list = self._get_index(test_length, train_length)  # 获取滚动窗口的索引列表
+    #         total_inference_time = 0
+    #         all_rolling_actual = []
+    #         all_rolling_predict = []
+    #         for i in range(min(len(index_list), self.num_rollings)):
+    #             index = index_list[i]
+    #             train, other = split_before(data, index)  # 分割训练数据
+    #             test, rest = split_before(other, self.pred_len)  # 分割测试数据
+    #             train_transformed = pd.DataFrame(self.scaler.transform(train.values), columns=train.columns, index=train.index)
+    #             start_inference_time = time.time()
+    #             predict = model.forecast(self.pred_len, train_transformed)  # 预测未来数据
+    #             end_inference_time = time.time()
+    #             print(predict)
+    #             # predict = self.scaler.inverse_transform(predict)
+    #             # end_inference_time = time.time()
+    #             # total_inference_time += end_inference_time - start_inference_time
+    #             # actual = test.to_numpy()
+    #
+    #             actual = pd.DataFrame(self.scaler.transform(test.values), columns=test.columns, index=test.index).to_numpy()
+    #             total_inference_time += end_inference_time - start_inference_time
+    #
+    #             single_series_result = self.evaluator.evaluate(  # 计算评价指标
+    #                 actual, predict, train_data.values
+    #             )
+    #             inference_data = pd.DataFrame(
+    #                 predict, columns=test.columns, index=test.index
+    #             )
+    #
+    #             all_rolling_actual.append(test)
+    #             all_rolling_predict.append(inference_data)
+    #             all_test_results.append(single_series_result)
+    #         average_inference_time = float(total_inference_time) / min(
+    #             len(index_list), self.num_rollings
+    #         )
+    #         single_series_results = np.mean(
+    #             np.stack(all_test_results), axis=0
+    #         ).tolist()  # 对所有滚动结果求均值
+    #
+    #         all_rolling_actual_pickle = pickle.dumps(all_rolling_actual)
+    #         # 使用 base64 进行编码
+    #         all_rolling_actual_pickle = base64.b64encode(all_rolling_actual_pickle).decode(
+    #             "utf-8"
+    #         )
+    #
+    #         all_rolling_predict_pickle = pickle.dumps(all_rolling_predict)
+    #         # 使用 base64 进行编码
+    #         all_rolling_predict_pickle = base64.b64encode(all_rolling_predict_pickle).decode(
+    #             "utf-8"
+    #         )
+    #
+    #         single_series_results += [
+    #             series_name,
+    #             end_fit_time - start_fit_time,
+    #             average_inference_time,
+    #             all_rolling_actual_pickle,
+    #             all_rolling_predict_pickle,
+    #             "",
+    #         ]
+    #     except Exception as e:
+    #         log = f"{traceback.format_exc()}\n{e}"
+    #         single_series_results = self.get_default_result(**{FieldNames.LOG_INFO: log})
+    #
+    #     return single_series_results
 
     # def execute(self, series_name: str, model_factory: ModelFactory) -> Any:
     #     """

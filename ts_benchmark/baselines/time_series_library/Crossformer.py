@@ -26,8 +26,13 @@ class Crossformer(nn.Module):
         self.enc_in = configs.enc_in
         self.seq_len = configs.seq_len
         self.pred_len = configs.pred_len
+<<<<<<< HEAD
         self.seg_len = 12
         self.win_size = 2
+=======
+        self.seg_len = configs.seg_len
+        self.win_size = configs.win_size
+>>>>>>> remotes/origin/qxf_dev
         self.task_name = configs.task_name
 
         # The padding operation to handle invisible sgemnet length

@@ -1,3 +1,10 @@
+import sys
+
+import torch
+
+sys.path.insert(0, '/home/OTB/')
+sys.path.insert(0, '/home/OTB/ts_benchmark/baselines/third_party')
+
 import logging
 from typing import Type
 
@@ -5,17 +12,19 @@ import numpy as np
 import pandas as pd
 import os
 
-from ts_benchmark.baselines.third_party.tods.sk_interface.detection_algorithm.IsolationForest_skinterface import IsolationForestSKI
-from ts_benchmark.baselines.third_party.tods.sk_interface.detection_algorithm.LSTMODetector_skinterface import LSTMODetectorSKI
+from ts_benchmark.baselines.third_party.tods.sk_interface.detection_algorithm.IsolationForest_skinterface import \
+    IsolationForestSKI
+from ts_benchmark.baselines.third_party.tods.sk_interface.detection_algorithm.LSTMODetector_skinterface import \
+    LSTMODetectorSKI
 from ts_benchmark.baselines.third_party.tods.sk_interface.detection_algorithm.KNN_skinterface import KNNSKI
-from ts_benchmark.baselines.third_party.tods.sk_interface.detection_algorithm.AutoEncoder_skinterface import AutoEncoderSKI
+from ts_benchmark.baselines.third_party.tods.sk_interface.detection_algorithm.AutoEncoder_skinterface import \
+    AutoEncoderSKI
 from ts_benchmark.baselines.third_party.tods.sk_interface.detection_algorithm.LOF_skinterface import LOFSKI
 from ts_benchmark.baselines.third_party.tods.sk_interface.detection_algorithm.OCSVM_skinterface import OCSVMSKI
 from ts_benchmark.baselines.third_party.tods.sk_interface.detection_algorithm.HBOS_skinterface import HBOSSKI
 from ts_benchmark.baselines.third_party.tods.sk_interface.detection_algorithm.LODA_skinterface import LODASKI
 
-
-TODS_MODELS =[
+TODS_MODELS = [
     [IsolationForestSKI, {}],
     [LSTMODetectorSKI, {}],
     [KNNSKI, {}],
@@ -26,7 +35,15 @@ TODS_MODELS =[
     [LODASKI, {}],
 
 ]
-
+# print(TODS_MODELS)
+# model = IsolationForestSKI()
+# for m in TODS_MODELS:
+#     print(m,'==============>')
+#     m[0]().fit(np.random.randn(10,1))
+# print('111111')
+# print(model)
+#
+# exit(1)
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +54,10 @@ class TodsModelAdapter:
     """
 
     def __init__(
-        self,
-        model_name: str,
-        model_class: object,
-        model_args: dict,
+            self,
+            model_name: str,
+            model_class: object,
+            model_args: dict,
     ):
         """
         初始化 Tods 模型适配器对象。
@@ -64,9 +81,43 @@ class TodsModelAdapter:
         :param label: 标签数据。
         :return: 拟合后的模型对象。
         """
+        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = self.model_class(**self.model_args)
+        # self.model.to(device)
+        X = series.values
+        self.model.fit(X)
 
         return self.model
+
+    # def detect_score(self, train: pd.DataFrame) -> np.ndarray:
+    #     """
+    #     使用适配的 Tods 模型计算异常得分。
+    #
+    #     :param train: 用于计算得分的训练数据。
+    #     :return: 异常得分数组。
+    #     """
+    #     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #     X = train.values.reshape(-1, 1)
+    #     # X = X.to(device)
+    #     self.model.fit(X)
+    #     prediction_score = self.model.predict_score(X).reshape(-1)
+    #
+    #     return prediction_score
+
+    # def detect_label(self, train: pd.DataFrame) -> np.ndarray:
+    #     """
+    #     使用适配的 Tods 模型进行异常检测并生成标签。
+    #
+    #     :param train: 用于异常检测的训练数据。
+    #     :return: 异常标签数组。
+    #     """
+    #     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #     X = train.values.reshape(-1, 1)
+    #     # X = X.to(device)
+    #     self.model.fit(X)
+    #     prediction_labels = self.model.predict(X).reshape(-1)
+    #
+    #     return prediction_labels
 
     def detect_score(self, train: pd.DataFrame) -> np.ndarray:
         """
@@ -75,11 +126,13 @@ class TodsModelAdapter:
         :param train: 用于计算得分的训练数据。
         :return: 异常得分数组。
         """
-        X = train.values.reshape(-1, 1)
-        self.model.fit(X)
+        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        X = train.values
+        # X = X.to(device)
+        # self.model.fit(X)
         prediction_score = self.model.predict_score(X).reshape(-1)
 
-        return prediction_score
+        return prediction_score, prediction_score
 
     def detect_label(self, train: pd.DataFrame) -> np.ndarray:
         """
@@ -88,22 +141,23 @@ class TodsModelAdapter:
         :param train: 用于异常检测的训练数据。
         :return: 异常标签数组。
         """
-        X = train.values.reshape(-1, 1)
-        self.model.fit(X)
+        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        X = train.values
+        # X = X.to(device)
+        # self.model.fit(X)
         prediction_labels = self.model.predict(X).reshape(-1)
 
-        return prediction_labels
+        return prediction_labels, prediction_labels
 
     def __repr__(self):
         """
         返回模型名称的字符串表示。
         """
         return self.model_name
-    
-    
+
 
 def generate_model_factory(
-    model_name: str, model_class: object, required_args: dict, 
+        model_name: str, model_class: object, required_args: dict,
 ) -> object:
     """
     生成模型工厂信息，用于创建 Tods 模型适配器。
@@ -120,11 +174,9 @@ def generate_model_factory(
         :param kwargs: 模型初始化参数。
         :return: Tods 模型适配器对象。
         """
-        return TodsModelAdapter(model_name, model_class, kwargs,)
+        return TodsModelAdapter(model_name, model_class, kwargs, )
 
     return {"model_factory": model_factory, "required_hyper_params": required_args}
-
-
 
 
 # 针对 TODS_MODELS 中的每个模型类和所需参数生成模型工厂并添加到全局变量中
@@ -133,8 +185,7 @@ for model_class, required_args in TODS_MODELS:
         model_class.__name__, model_class, required_args
     )
 
-
-#TODO tods adapter
+# TODO tods adapter
 # def deep_tods_model_adapter(model_info: Type[object]) -> object:
 #     """
 #     适配深度 Tods 模型。
