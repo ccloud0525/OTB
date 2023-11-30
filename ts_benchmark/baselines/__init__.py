@@ -7,6 +7,7 @@ ADAPTER = {
     "transformer_adapter1": "ts_benchmark.baselines.adapters_for_timesnet.transformer_adapter1",
     "transformer_adapter_single": "ts_benchmark.baselines.adapters_for_transformers_single.transformer_adapter_single",
     "dcdetector_adapter": "ts_benchmark.baselines.adapters_for_dcdetector.dcdetector_adapter",
-    "anomaly_trans_adapter": "ts_benchmark.baselines.adapters_for_anomaly_trans.anomaly_trans_adapter"
+    "anomaly_trans_adapter": "ts_benchmark.baselines.adapters_for_anomaly_trans.anomaly_trans_adapter",
+    "spatial_temporal_adapter": "ts_benchmark.baselines.adapters_for_spatial_temporal_models.spatial_temporal_adapter",
 
 }

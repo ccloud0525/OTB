@@ -176,7 +176,12 @@ if __name__ == "__main__":
         ],
         help="Presentation form of algorithm performance comparison results",
     )
-
+    parser.add_argument(
+        "--saved-path",
+        type=str,
+        default=None,
+        help="saved-path",
+    )
 
     args = parser.parse_args()
 
