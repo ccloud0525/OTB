@@ -16,23 +16,17 @@ from ..common.constant import ROOT_PATH
 DEFAULT_SPATIAL_TEMPORAL_BASED_HYPER_PARAMS = {
     "batch_size": 64,
     "lr": 0.003,
-    "num_epochs": 10,
+    "num_epochs": 100,
     "loss": "L1",
-    "patience": 3,
+    "patience": 10,
     "num_node": 7,
-    "input_dim": 1,
-    "output_dim": 1,
     "seq_len": 12,
     "pred_len": 12,
     "label_len": 6,
-    "hidden_dim": 64,
-    "num_layers": 2,
-    "default_graph": True,
-    "embed_dim": 2,
-    "cheb_k": 3,
     "freq": "h",
     "num_workers": 5,
     "lradj": "type1",
+    "pems_bay": True,
 }
 
 
@@ -51,7 +45,7 @@ class StandardScaler:
     def transform(self, data: np.ndarray):
         return (data - self.mean) / self.std
 
-    def inverse_transformer(self, data: np.ndarray):
+    def inverse_transform(self, data: np.ndarray):
         return data * self.std + self.mean
 
 
@@ -123,7 +117,15 @@ class SpatialTemporalAdapter:
             target = target[:, -config.pred_len :, ...]
             output = output[:, -config.pred_len :, ...]
 
-            loss = criterion(output, target).detach().cpu().numpy()
+            loss = (
+                criterion(
+                    self.scaler.inverse_transform(output),
+                    self.scaler.inverse_transform(target),
+                )
+                .detach()
+                .cpu()
+                .numpy()
+            )
             total_loss.append(loss)
 
         total_loss = np.mean(total_loss)
@@ -223,7 +225,10 @@ class SpatialTemporalAdapter:
 
                 target = target[:, -config.pred_len :, ...]
                 output = output[:, -config.pred_len :, ...]
-                loss = criterion(output, target)
+                loss = criterion(
+                    self.scaler.inverse_transform(output),
+                    self.scaler.inverse_transform(target),
+                )
 
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.model.parameters(), 5)
@@ -279,7 +284,9 @@ class SpatialTemporalAdapter:
                         spatial_temporal_dim_unifrom(target).to(device),
                     )
 
-                    output = self.model(input).squeeze(-1)
+                    output = self.scaler.inverse_transform(
+                        self.model(input).squeeze(-1)
+                    )
 
                 column_num = output.shape[-1]
                 temp = output.cpu().numpy().reshape(-1, column_num)[-config.pred_len :]

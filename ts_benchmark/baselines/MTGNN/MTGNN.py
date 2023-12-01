@@ -1,7 +1,33 @@
 import torch
-
+import pickle
+from pathlib import Path
 from .layer import *
+def load_adj(pkl_filename):
+    """
+    为什么gw的邻接矩阵要做对称归一化，而dcrnn的不做？其实做了，在不同的地方，是为了执行双向随机游走算法。
+    所以K-order GCN需要什么样的邻接矩阵？
+    这个应该参考ASTGCN，原始邻接矩阵呢？参考dcrnn
+    为什么ASTGCN不采用对称归一化的拉普拉斯矩阵？
+    :param pkl_filename: adj_mx.pkl
+    :return:
+    """
+    sensor_ids, sensor_id_to_ind, adj_mx = load_pickle(pkl_filename)
 
+    return sensor_ids, sensor_id_to_ind, adj_mx
+
+
+def load_pickle(pkl_filename):
+    try:
+        with Path(pkl_filename).open('rb') as f:
+            pkl_data = pickle.load(f)
+    except UnicodeDecodeError as e:
+        with Path(pkl_filename).open('rb') as f:
+            pkl_data = pickle.load(f, encoding='latin1')
+    except Exception as e:
+        print('Unable to load data ', pkl_filename, ':', e)
+        raise
+
+    return pkl_data
 
 class MTGNN(nn.Module):
     def __init__(
@@ -32,10 +58,14 @@ class MTGNN(nn.Module):
     ):
         super(MTGNN, self).__init__()
         self.gcn_true = gcn_true
-        self.buildA_true = buildA_true
-        self.num_nodes = num_nodes
+        self.num_nodes = config.num_node
         self.dropout = dropout
-        self.predefined_A = predefined_A
+        if config.pems_bay == True:
+            self.buildA_true = False
+            self.predefined_A = load_adj('/home/OTB/dataset/adj_mx_bay.pkl')
+        else:
+            self.buildA_true = True
+            self.predefined_A = None
         self.filter_convs = nn.ModuleList()
         self.gate_convs = nn.ModuleList()
         self.residual_convs = nn.ModuleList()
@@ -47,7 +77,7 @@ class MTGNN(nn.Module):
             in_channels=in_dim, out_channels=residual_channels, kernel_size=(1, 1)
         )
         self.gc = graph_constructor(
-            num_nodes,
+            self.num_nodes,
             subgraph_size,
             node_dim,
             device,
@@ -55,7 +85,7 @@ class MTGNN(nn.Module):
             static_feat=static_feat,
         )
 
-        self.seq_length = seq_length
+        self.seq_length = config.seq_len
         kernel_size = 7
         if dilation_exponential > 1:
             self.receptive_field = int(
@@ -149,7 +179,7 @@ class MTGNN(nn.Module):
                         LayerNorm(
                             (
                                 residual_channels,
-                                num_nodes,
+                                config.num_node,
                                 self.seq_length - rf_size_j + 1,
                             ),
                             elementwise_affine=layer_norm_affline,
@@ -160,7 +190,7 @@ class MTGNN(nn.Module):
                         LayerNorm(
                             (
                                 residual_channels,
-                                num_nodes,
+                                config.num_node,
                                 self.receptive_field - rf_size_j + 1,
                             ),
                             elementwise_affine=layer_norm_affline,
@@ -178,7 +208,7 @@ class MTGNN(nn.Module):
         )
         self.end_conv_2 = nn.Conv2d(
             in_channels=end_channels,
-            out_channels=out_dim,
+            out_channels=config.pred_len,
             kernel_size=(1, 1),
             bias=True,
         )
@@ -262,5 +292,4 @@ class MTGNN(nn.Module):
         x = F.relu(self.end_conv_1(x))
         x = self.end_conv_2(x)
 
-        x = x.permute(0, 3, 2, 1)
         return x
