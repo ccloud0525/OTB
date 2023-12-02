@@ -26,7 +26,7 @@ DEFAULT_SPATIAL_TEMPORAL_BASED_HYPER_PARAMS = {
     "freq": "h",
     "num_workers": 5,
     "lradj": "type1",
-    "pems_bay": True,
+    "dataset_name": "PEMSD7M",
 }
 
 

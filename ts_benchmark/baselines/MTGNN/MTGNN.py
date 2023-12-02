@@ -2,6 +2,12 @@ import torch
 import pickle
 from pathlib import Path
 from .layer import *
+import scipy.sparse as sp
+import numpy as np
+import os
+import pandas as pd
+
+
 def load_adj(pkl_filename):
     """
     为什么gw的邻接矩阵要做对称归一化，而dcrnn的不做？其实做了，在不同的地方，是为了执行双向随机游走算法。
@@ -18,16 +24,24 @@ def load_adj(pkl_filename):
 
 def load_pickle(pkl_filename):
     try:
-        with Path(pkl_filename).open('rb') as f:
+        with Path(pkl_filename).open("rb") as f:
             pkl_data = pickle.load(f)
     except UnicodeDecodeError as e:
-        with Path(pkl_filename).open('rb') as f:
-            pkl_data = pickle.load(f, encoding='latin1')
+        with Path(pkl_filename).open("rb") as f:
+            pkl_data = pickle.load(f, encoding="latin1")
     except Exception as e:
-        print('Unable to load data ', pkl_filename, ':', e)
+        print("Unable to load data ", pkl_filename, ":", e)
         raise
 
     return pkl_data
+
+
+def load_sparse_adj(adj_path):
+    adj = sp.load_npz(os.path.join(adj_path))
+    adj = adj.tocsc()
+
+    return adj
+
 
 class MTGNN(nn.Module):
     def __init__(
@@ -60,9 +74,29 @@ class MTGNN(nn.Module):
         self.gcn_true = gcn_true
         self.num_nodes = config.num_node
         self.dropout = dropout
-        if config.pems_bay == True:
+        if config.dataset_name == "PEMS-BAY":
             self.buildA_true = False
-            self.predefined_A = load_adj('/home/OTB/dataset/adj_mx_bay.pkl')
+            _, _, self.predefined_A = load_adj("../dataset/adj_mx_bay.pkl")
+            self.predefined_A = torch(self.predefined_A).to(device)
+        elif config.dataset_name == "PEMSD7M":
+            self.buildA_true = False
+            self.predefined_A = np.load("../dataset/pemsd7m_adj.npz")["data"]
+            self.predefined_A = torch(self.predefined_A).to(device)
+
+        elif config.dataset_name == "NYC_TAXI":
+            self.buildA_true = False
+            self.predefined_A = pd.read_csv("../dataset/nyc_taxi_adj.csv", header=None).values.astype(
+                np.float32
+            )
+            self.predefined_A = torch(self.predefined_A).to(device)
+
+        elif config.dataset_name == "NYC_BIKE":
+            self.buildA_true = False
+            self.predefined_A = pd.read_csv("../dataset/nyc_bike_adj.csv", header=None).values.astype(
+                np.float32
+            )
+            self.predefined_A = torch(self.predefined_A).to(device)
+
         else:
             self.buildA_true = True
             self.predefined_A = None
