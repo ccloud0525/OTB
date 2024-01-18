@@ -55,7 +55,7 @@ class MTGNN(nn.Module):
         predefined_A=None,
         static_feat=None,
         dropout=0.3,
-        subgraph_size=4,
+        subgraph_size=20,
         node_dim=40,
         dilation_exponential=1,
         conv_channels=32,
@@ -77,25 +77,25 @@ class MTGNN(nn.Module):
         if config.dataset_name == "PEMS-BAY":
             self.buildA_true = False
             _, _, self.predefined_A = load_adj("../dataset/adj_mx_bay.pkl")
-            self.predefined_A = torch(self.predefined_A).to(device)
+            self.predefined_A = torch.tensor(self.predefined_A).to(device)
         elif config.dataset_name == "PEMSD7M":
             self.buildA_true = False
-            self.predefined_A = np.load("../dataset/pemsd7m_adj.npz")["data"]
-            self.predefined_A = torch(self.predefined_A).to(device)
+            self.predefined_A = sp.load_npz("../dataset/pemsd7m_adj.npz")["data"]
+            self.predefined_A = torch.tensor(self.predefined_A).to(device)
 
         elif config.dataset_name == "NYC_TAXI":
             self.buildA_true = False
             self.predefined_A = pd.read_csv("../dataset/nyc_taxi_adj.csv", header=None).values.astype(
                 np.float32
             )
-            self.predefined_A = torch(self.predefined_A).to(device)
+            self.predefined_A = torch.tensor(self.predefined_A).to(device)
 
         elif config.dataset_name == "NYC_BIKE":
             self.buildA_true = False
             self.predefined_A = pd.read_csv("../dataset/nyc_bike_adj.csv", header=None).values.astype(
                 np.float32
             )
-            self.predefined_A = torch(self.predefined_A).to(device)
+            self.predefined_A = torch.tensor(self.predefined_A).to(device)
 
         else:
             self.buildA_true = True
