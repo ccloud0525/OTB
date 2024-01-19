@@ -3,8 +3,11 @@ import random
 import numpy as np
 import argparse
 import os
+import pickle
+
 
 import pandas as pd
+import torch
 
 from ts_benchmark.utils.random_utils import fix_random_seed
 import time
@@ -127,15 +130,17 @@ if __name__ == "__main__":
     t = time.time()
 
     model = TS2Vec(input_dims=train_data.shape[-1], device=device, **config)
+    if os.path.exists(f"{run_dir}/model.pkl"):
+        model.load(f"{run_dir}/model.pkl")
+    else:
+        print("Training...")
+        loss_log = model.fit(
+            train_data, n_epochs=args.epochs, n_iters=args.iters, verbose=True
+        )
+        model.save(f"{run_dir}/model.pkl")
 
-    print("Training...")
-    loss_log = model.fit(
-        train_data, n_epochs=args.epochs, n_iters=args.iters, verbose=True
-    )
-    model.save(f"{run_dir}/model.pkl")
-
-    t = time.time() - t
-    print(f"\nTraining time: {datetime.timedelta(seconds=t)}\n")
+        t = time.time() - t
+        print(f"\nTraining time: {datetime.timedelta(seconds=t)}\n")
 
     print("Encoding...")
 
@@ -145,23 +150,15 @@ if __name__ == "__main__":
 
     data_alg = []
 
-    for id, dataset, algorithm in enumerate(dataset_algorithm):
-        data = all_repr[:, id, :]
-        data_alg.append((data, algorithm))
-
-    print(data_alg)
-    # all_repr = all_repr.transpose(1, 0, 2)  # T x N x D
-    # all_repr = utils.sample_split(all_repr, args.seq_len, 0)  # bn x seq_len x N x D
-    # all_repr = all_repr.transpose(0, 2, 1, 3)  # bn x N x seq_len x D
-    # temp_repr = np.mean(all_repr, axis=1, keepdims=False)  # bn x seq_len x D
-    #
-    # sample_num = args.sample_num
-    # sample_index = sorted(np.random.choice(range(0, temp_repr.shape[0]), sample_num))
-    # sample_repr = temp_repr[sample_index]  # bc x seq_len x D
-    #
-    # dir = f"../task_feature/{args.dataset}"
-    # if not os.path.exists(dir):
-    #     os.makedirs(dir)
-    # np.save(os.path.join(dir, f"{args.seq_len}_ts2vec_task_feature.npy"), sample_repr)
+    for id, (dataset, algorithm) in enumerate(list(dataset_algorithm)):
+        data = np.squeeze(all_repr[id, :, :])
+        data_alg.append([data,algorithm])
 
     print("Finished.")
+    with open("data.pkl", "wb") as f:
+        pickle.dump(data_alg, f)
+
+    with open("data.pkl", "rb") as f:
+        loaded_data = pickle.load(f)
+
+    print(loaded_data)

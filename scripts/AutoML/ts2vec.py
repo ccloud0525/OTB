@@ -11,7 +11,7 @@ import math
 class TS2Vec:
     '''The TS2Vec model'''
 
-    def __init__(
+    def  __init__(
             self,
             input_dims,
             output_dims=256,
