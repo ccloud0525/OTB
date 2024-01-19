@@ -1,16 +1,10 @@
-import random
-
 import numpy as np
-import torch
-from tqdm import tqdm
 from .set_encoder.setenc_models import *
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def train_classifier(
-    data_loader, valid_loader, classifier, criterion, optimizer
-):
+def train_classifier(data_loader, valid_loader, classifier, criterion, optimizer):
     train_loss = []
     classifier.train()
     train_dataloader = data_loader
@@ -46,19 +40,19 @@ def train_classifier(
     return np.mean(train_loss), np.mean(valid_loss)
 
 
-def evaluate(test_loader, classifier, criterion):
-    classifier = classifier.eval()
-    with torch.no_grad():
-        test_loss = []
-        for i, (feature, label) in enumerate(test_loader.get_iterator()):
-            label = torch.Tensor(label).to(DEVICE)
-
-            outputs = classifier(feature)
-
-            loss = criterion(outputs, label)
-            test_loss.append(loss.item())
-
-    return np.mean(test_loss)
+# def evaluate(test_loader, classifier, criterion):
+#     classifier = classifier.eval()
+#     with torch.no_grad():
+#         test_loss = []
+#         for i, (feature, label) in enumerate(test_loader.get_iterator()):
+#             label = torch.Tensor(label).to(DEVICE)
+#
+#             outputs = classifier(feature)
+#
+#             loss = criterion(outputs, label)
+#             test_loss.append(loss.item())
+#
+#     return np.mean(test_loss)
 
 
 class classifier(nn.Module):

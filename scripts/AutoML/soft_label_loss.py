@@ -1,7 +1,11 @@
 import torch
-from torch import nn
-import torch.nn.functional as F
 
-def soft_label_loss(output,label):
+
+def soft_label_loss(output, label):
     K = label.shape[-1]
 
+    loss = torch.sum(label + 1 / K * output - label * output, dim=-1)
+
+    loss = torch.mean(loss)
+
+    return loss
