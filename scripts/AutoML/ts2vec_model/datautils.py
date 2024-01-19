@@ -125,6 +125,22 @@ def _get_time_features(dt):
         dt.weekofyear.to_numpy(),
     ], axis=1).astype(np.float)
 
+def process_data(dataset,ratio):
+    train_ratio, val_ratio, test_ratio = ratio
+
+    data = dataset
+
+    train_slice = slice(None, int(train_ratio * len(data)))
+    valid_slice = slice(int(train_ratio * len(data)), int((train_ratio + val_ratio) * len(data)))
+    test_slice = slice(int((1 - test_ratio) * len(data)), None)
+
+    scaler = StandardScaler().fit(data[train_slice])
+    data = scaler.transform(data)
+
+    data = np.expand_dims(data, 0)
+    data = np.transpose(data, (2, 1, 0))
+
+    return data, train_slice, valid_slice, test_slice, scaler
 
 def load_csv(name, ratio):
     data = pd.read_csv(f'../data/{name}.csv', parse_dates=True)
