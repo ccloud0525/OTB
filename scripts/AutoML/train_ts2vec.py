@@ -55,7 +55,7 @@ if __name__ == "__main__":
         default=320,
         help="The representation dimension (defaults to 320)",
     )
-    parser.add_argument("--sample_num", type=int, default=80, help="samples num")
+    parser.add_argument("--sample_num", type=int, default=24, help="samples num")
 
     parser.add_argument(
         "--max-train-length",
