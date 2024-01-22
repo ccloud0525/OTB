@@ -1,3 +1,5 @@
+import os.path
+
 import torch
 import lightgbm as lgb
 import pickle
@@ -37,8 +39,12 @@ if __name__ == "__main__":
         "lambda_l2": 0.5,
         "min_gain_to_split": 0.2,
     }
+    if not os.path.exists("ckpt"):
+        os.mkdir("ckpt")
 
     if args.mode == "normal":
+        with open(f"ckpt/gbm_normal_{args.exp_id}.log", "w") as f:
+            print(f"start training...", file=f)
         length = len(loaded_data)
         train_data = loaded_data[: int(0.8 * length)]
         valid_data = loaded_data[int(0.8 * length) :]
@@ -63,7 +69,11 @@ if __name__ == "__main__":
 
         pred = gbm.predict(train_features, num_iteration=gbm.best_iteration)
         pred_list = [list(x).index(max(x)) for x in pred]
-        print(f"pred_accuracy on train set:{accuracy_score(train_y_series, pred_list)}")
+        with open(f"ckpt/gbm_normal_{args.exp_id}.log", "a") as f:
+            print(
+                f"pred_accuracy on train set:{accuracy_score(train_y_series, pred_list)}",
+                file=f,
+            )
 
         def get_index(lst, k):
             np_lst = np.array(lst)
@@ -84,10 +94,13 @@ if __name__ == "__main__":
         pred = gbm.predict(valid_features, num_iteration=gbm.best_iteration)
         # for k in range(3, 30):
         #     print(f"pred_accuracy on valid set with k={k}:{test_k(pred, k)}")
-        print(f"accuracy:{test_k(pred, args.top_k)}")
+        with open(f"ckpt/gbm_normal_{args.exp_id}.log", "a") as f:
+            print(f"accuracy on valid set:{test_k(pred, args.top_k)}", file=f)
+
+        gbm.save_model(f"ckpt/best_gbm_{args.exp_id}.txt")
 
     elif args.mode == "k-fold":
-        with open(f"ckpt/k-fold_{args.exp_id}.txt", "w") as f:
+        with open(f"ckpt/gbm_k-fold_{args.exp_id}.log", "w") as f:
             print(f"start k-fold training...", file=f)
 
         datasets, vectors = zip(*loaded_data)
@@ -99,7 +112,7 @@ if __name__ == "__main__":
 
         best_model = None
         best_acc = 0
-        best_fold=0
+        best_fold = 0
         for fold, (train_idx, valid_idx) in enumerate(kf.split(X)):
             X_train, X_valid = X[train_idx], X[valid_idx]
             y_train, y_valid = y[train_idx], y[valid_idx]
@@ -112,6 +125,15 @@ if __name__ == "__main__":
             gbm = lgb.train(
                 params, train_data, num_boost_round=100, valid_sets=[valid_data]
             )
+
+            # 看看训练集拟合效果
+            pred = gbm.predict(X_train, num_iteration=gbm.best_iteration)
+            pred_list = [list(x).index(max(x)) for x in pred]
+            with open(f"ckpt/gbm_k-fold_{args.exp_id}.log", "a") as f:
+                print(
+                    f"pred_accuracy on train set:{accuracy_score(y_train, pred_list)}",
+                    file=f,
+                )
 
             # 在验证集上进行预测
             y_pred = gbm.predict(X_valid, num_iteration=gbm.best_iteration)
@@ -136,16 +158,16 @@ if __name__ == "__main__":
 
             # 评估模型性能
             acc = test_k(y_pred, args.top_k)
-            with open(f"ckpt/k-fold_{args.exp_id}.txt", "a") as f:
-                print(f"Fold {fold + 1}, ACC: {acc}", file=f)
+            with open(f"ckpt/gbm_k-fold_{args.exp_id}.log", "a") as f:
+                print(f"Fold {fold + 1}, ACC on valid set: {acc}", file=f)
 
             if acc > best_acc:
                 best_acc = acc
                 best_model = gbm
                 best_fold = fold + 1
 
-        with open(f"ckpt/k-fold_{args.exp_id}.txt", "a") as f:
-            print(f"Best Fold: {best_fold}, Best ACC: {best_acc}", file=f)
+        with open(f"ckpt/gbm_k-fold_{args.exp_id}.log", "a") as f:
+            print(f"Best Fold: {best_fold}, Best ACC on valid set: {best_acc}", file=f)
 
         best_model.save_model(f"ckpt/best_gbm_{args.exp_id}.txt")
 
