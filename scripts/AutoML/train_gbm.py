@@ -3,6 +3,7 @@ import lightgbm as lgb
 import pickle
 import numpy as np
 import argparse
+from sklearn.model_selection import KFold
 from sklearn.metrics import accuracy_score
 from ts_benchmark.utils.random_utils import fix_random_seed
 
@@ -10,8 +11,9 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 parser = argparse.ArgumentParser(description="Args for zero-cost AutoML")
 
-parser.add_argument("--top_k", type=int, default=5)
+parser.add_argument("--top_k", type=int, default=10)
 parser.add_argument("--exp_id", type=int, default=1)
+parser.add_argument("--mode", type=str, default="normal")
 
 args = parser.parse_args()
 fix_random_seed()
@@ -21,27 +23,6 @@ torch.set_num_threads(3)
 if __name__ == "__main__":
     with open("data.pkl", "rb") as f:
         loaded_data = pickle.load(f)
-
-    length = len(loaded_data)
-    train_data = loaded_data[: int(0.8 * length)]
-    valid_data = loaded_data[int(0.8 * length) :]
-    train_datasets, train_vectors = zip(*train_data)
-    train_features = np.array(
-        [np.reshape(train_datasets[i], -1) for i in range(len(train_datasets))]
-    )
-    train_vectors = list(train_vectors)
-    train_y_series = np.array(np.argmax(train_vectors, axis=1))
-    train_set = lgb.Dataset(train_features, label=train_y_series)
-
-    valid_datasets, valid_vectors = zip(*valid_data)
-    valid_features = np.array(
-        [np.reshape(valid_datasets[i], -1) for i in range(len(valid_datasets))]
-    )
-    valid_vectors = list(valid_vectors)
-    valid_y_series = np.array(np.argmax(valid_vectors, axis=1))
-
-    valid_set = lgb.Dataset(valid_features, label=valid_y_series)
-
     params = {
         "boosting_type": "gbdt",
         "objective": "multiclass",
@@ -57,16 +38,116 @@ if __name__ == "__main__":
         "min_gain_to_split": 0.2,
     }
 
-    gbm = lgb.train(params, train_set, num_boost_round=100, valid_sets=[valid_set])
+    if args.mode == "normal":
+        length = len(loaded_data)
+        train_data = loaded_data[: int(0.8 * length)]
+        valid_data = loaded_data[int(0.8 * length) :]
+        train_datasets, train_vectors = zip(*train_data)
+        train_features = np.array(
+            [np.reshape(train_datasets[i], -1) for i in range(len(train_datasets))]
+        )
+        train_vectors = list(train_vectors)
+        train_y_series = np.array(np.argmax(train_vectors, axis=1))
+        train_set = lgb.Dataset(train_features, label=train_y_series)
 
-    pred = gbm.predict(valid_features, num_iteration=gbm.best_iteration)
+        valid_datasets, valid_vectors = zip(*valid_data)
+        valid_features = np.array(
+            [np.reshape(valid_datasets[i], -1) for i in range(len(valid_datasets))]
+        )
+        valid_vectors = list(valid_vectors)
+        valid_y_series = np.array(np.argmax(valid_vectors, axis=1))
 
-    pred_list = [list(x).index(max(x)) for x in pred]
+        valid_set = lgb.Dataset(valid_features, label=valid_y_series)
 
-    print(f"pred_accuracy on valid set:{accuracy_score(valid_y_series, pred_list)}")
+        gbm = lgb.train(params, train_set, num_boost_round=100, valid_sets=[valid_set])
 
-    pred = gbm.predict(train_features, num_iteration=gbm.best_iteration)
+        pred = gbm.predict(train_features, num_iteration=gbm.best_iteration)
+        pred_list = [list(x).index(max(x)) for x in pred]
+        print(f"pred_accuracy on train set:{accuracy_score(train_y_series, pred_list)}")
 
-    pred_list = [list(x).index(max(x)) for x in pred]
+        def get_index(lst, k):
+            np_lst = np.array(lst)
+            indices = np.argsort(-np_lst)
+            return indices[0:k]
 
-    print(f"pred_accuracy on train set:{accuracy_score(train_y_series, pred_list)}")
+        def test_k(pred, k):
+            pred_list = [get_index(list(x), k) for x in pred]
+
+            cnt = 0
+            for i in range(len(valid_y_series)):
+                if valid_y_series[i] in pred_list[i]:
+                    cnt += 1
+
+            accuracy = cnt / len(valid_y_series)
+            return accuracy
+
+        pred = gbm.predict(valid_features, num_iteration=gbm.best_iteration)
+        # for k in range(3, 30):
+        #     print(f"pred_accuracy on valid set with k={k}:{test_k(pred, k)}")
+        print(f"accuracy:{test_k(pred, args.top_k)}")
+
+    elif args.mode == "k-fold":
+        with open(f"ckpt/k-fold_{args.exp_id}.txt", "w") as f:
+            print(f"start k-fold training...", file=f)
+
+        datasets, vectors = zip(*loaded_data)
+        X = np.array([np.reshape(datasets[i], -1) for i in range(len(datasets))])
+        vectors = list(vectors)
+        y = np.array(np.argmax(vectors, axis=1))
+        num_folds = 5  # 假设使用5折交叉验证
+        kf = KFold(n_splits=num_folds, shuffle=True, random_state=42)
+
+        best_model = None
+        best_acc = 0
+        best_fold=0
+        for fold, (train_idx, valid_idx) in enumerate(kf.split(X)):
+            X_train, X_valid = X[train_idx], X[valid_idx]
+            y_train, y_valid = y[train_idx], y[valid_idx]
+
+            train_data = lgb.Dataset(X_train, label=y_train)
+            valid_data = lgb.Dataset(X_valid, label=y_valid, reference=train_data)
+
+            # 训练模型
+
+            gbm = lgb.train(
+                params, train_data, num_boost_round=100, valid_sets=[valid_data]
+            )
+
+            # 在验证集上进行预测
+            y_pred = gbm.predict(X_valid, num_iteration=gbm.best_iteration)
+
+            pred_list = [list(x).index(max(x)) for x in y_pred]
+
+            def get_index(lst, k):
+                np_lst = np.array(lst)
+                indices = np.argsort(-np_lst)
+                return indices[0:k]
+
+            def test_k(pred, k):
+                pred_list = [get_index(list(x), k) for x in pred]
+
+                cnt = 0
+                for i in range(len(y_valid)):
+                    if y_valid[i] in pred_list[i]:
+                        cnt += 1
+
+                accuracy = cnt / len(y_valid)
+                return accuracy
+
+            # 评估模型性能
+            acc = test_k(y_pred, args.top_k)
+            with open(f"ckpt/k-fold_{args.exp_id}.txt", "a") as f:
+                print(f"Fold {fold + 1}, ACC: {acc}", file=f)
+
+            if acc > best_acc:
+                best_acc = acc
+                best_model = gbm
+                best_fold = fold + 1
+
+        with open(f"ckpt/k-fold_{args.exp_id}.txt", "a") as f:
+            print(f"Best Fold: {best_fold}, Best ACC: {best_acc}", file=f)
+
+        best_model.save_model(f"ckpt/best_gbm_{args.exp_id}.txt")
+
+    elif args.mode == "test":
+        gbm = lgb.Booster(model_file=f"ckpt/best_gbm_{args.exp_id}.txt")

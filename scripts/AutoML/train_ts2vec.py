@@ -5,7 +5,6 @@ import argparse
 import os
 import pickle
 
-
 import pandas as pd
 import torch
 
@@ -66,7 +65,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--iters", type=int, default=None, help="The number of iterations"
     )
-    parser.add_argument("--epochs", type=int, default=30, help="The number of epochs")
+    parser.add_argument("--epochs", type=int, default=50, help="The number of epochs")
     parser.add_argument(
         "--save-every",
         type=int,
@@ -152,7 +151,7 @@ if __name__ == "__main__":
 
     for id, (dataset, algorithm) in enumerate(list(dataset_algorithm)):
         data = np.squeeze(all_repr[id, :, :])
-        data_alg.append([data,algorithm])
+        data_alg.append([data, algorithm])
 
     print("Finished.")
     with open("data.pkl", "wb") as f:
