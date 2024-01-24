@@ -10,7 +10,6 @@ import warnings
 import numpy as np
 import torch
 
-
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 sys.path.insert(
     0, os.path.join(os.path.dirname(__file__), "../ts_benchmark/baselines/third_party")
@@ -45,15 +44,13 @@ if __name__ == "__main__":
             "unfixed_detect_label_config.json",
             "all_detect_score_config.json",
             "all_detect_label_config.json",
-
             "fixed_forecast_config_daily.json",
             "fixed_forecast_config_monthly.json",
             "fixed_forecast_config_other.json",
             "fixed_forecast_config_quarterly.json",
             "fixed_forecast_config_weekly.json",
             "fixed_forecast_config_yearly.json",
-            "fixed_forecast_config_hourly.json"
-
+            "fixed_forecast_config_hourly.json",
         ],
         help="evaluation config file path",
     )
@@ -191,9 +188,6 @@ if __name__ == "__main__":
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-
-
-
     torch.set_num_threads(3)
 
     with open(os.path.join(CONFIG_PATH, args.config_path), "r") as file:
@@ -222,7 +216,9 @@ if __name__ == "__main__":
 
     if args.model_hyper_params is not None:
         if len(args.model_name) > len(args.model_hyper_params):
-            args.model_hyper_params.extend([None] * (len(args.model_name) - len(args.model_hyper_params)))
+            args.model_hyper_params.extend(
+                [None] * (len(args.model_name) - len(args.model_hyper_params))
+            )
 
     args.adapter = (
         [None if item == "None" else item for item in args.adapter]
@@ -249,19 +245,16 @@ if __name__ == "__main__":
             }
         )
 
-
-
     model_eval_config = config_data["model_eval_config"]
 
     metric_list = []
-    if args.metric_name != 'all':
+    if args.metric_name != "all":
         for metric in args.metric_name:
             metric_name = json.loads(metric)
             metric_list.append(metric_name)
         model_eval_config["metric_name"] = metric_list
     else:
-         model_eval_config["metric_name"] = args.metric_name
-
+        model_eval_config["metric_name"] = args.metric_name
 
     default_strategy_args = model_eval_config["strategy_args"]
     specific_strategy_args = (
@@ -300,7 +293,12 @@ if __name__ == "__main__":
     #     report_config["leaderboard_file_name"] = leaderboard_file_name
     #     report_csv.report(report_config)
     try:
-        log_filenames = pipeline(data_loader_config, model_config, model_eval_config, report_config["saved_path"])
+        log_filenames = pipeline(
+            data_loader_config,
+            model_config,
+            model_eval_config,
+            report_config["saved_path"],
+        )
 
     finally:
         ParallelBackend().close(force=True)
@@ -316,4 +314,3 @@ if __name__ == "__main__":
         report_config["leaderboard_file_name"] = leaderboard_file_name
 
         report_csv.report(report_config)
-

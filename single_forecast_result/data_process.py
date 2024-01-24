@@ -3,6 +3,7 @@ import numpy as np
 import os
 from tqdm import tqdm
 import shutil
+import pickle
 
 data_path = "forth/ori_all_datasets"
 dir_list = os.listdir(data_path)
@@ -19,12 +20,14 @@ dir_list = os.listdir(data_path)
 dataset_path = "8000"
 dataset_list = os.listdir(dataset_path)
 
-os.makedirs("chosen_datasets", exist_ok=True)
-for dataset in dataset_list:
-    path = os.path.join(dataset_path, dataset)
-    dataset_file = pd.read_csv(path)
-    if len(dataset_file) > 24:
-        shutil.copy(path, os.path.join("chosen_datasets", dataset))
+
+# os.makedirs("chosen_datasets", exist_ok=True)
+# for dataset in dataset_list:
+#     path = os.path.join(dataset_path, dataset)
+#     dataset_file = pd.read_csv(path)
+#     if len(dataset_file) > 24 + 48:
+#         shutil.copy(path, os.path.join("chosen_datasets", dataset))
+#
 
 
 def get_all_files_in_directory(directory):
@@ -37,16 +40,16 @@ def get_all_files_in_directory(directory):
     return all_files
 
 
-directory_path = "chosen_datasets/单变量序列预测160条"
-all_files = get_all_files_in_directory(directory_path)
-file_name = []
-for file_path in all_files:
-    file_name.append(os.path.basename(file_path))
-
-file_list = os.listdir("chosen_datasets")
-for file in file_list:
-    if os.path.isfile(os.path.join("chosen_datasets", file)) and file in file_name:
-        os.remove(os.path.join("chosen_datasets", file))
+# directory_path = "chosen_datasets/单变量序列预测160条"
+# all_files = get_all_files_in_directory(directory_path)
+# file_name = []
+# for file_path in all_files:
+#     file_name.append(os.path.basename(file_path))
+#
+# file_list = os.listdir("chosen_datasets")
+# for file in file_list:
+#     if os.path.isfile(os.path.join("chosen_datasets", file)) and file in file_name:
+#         os.remove(os.path.join("chosen_datasets", file))
 
 directory_path = "forth/ori_all_datasets"
 all_files = get_all_files_in_directory(directory_path)
@@ -127,6 +130,17 @@ dataset_algorithm_one_hot_list = []
 for dataset, algorithm in dataset_algorithm.items():
     vector = [0] * 31
     vector[model_name_dict[algorithm]] = 1
-    dataset_algorithm_one_hot_list.append((dataset, vector))
+    dataset_algorithm_one_hot_list.append([dataset, vector])
 
-np.save("dataset_algorithm.npy", dataset_algorithm_one_hot_list)
+try:
+    np.save(
+        "dataset_algorithm.npy", np.array(dataset_algorithm_one_hot_list, dtype=object)
+    )
+except:
+    np.save(
+        "dataset_algorithm.npy",
+        np.array(dataset_algorithm_one_hot_list, dtype=object),
+        allow_pickle=True,
+    )
+# with open("dataset_algorithm.pkl", "wb") as f:
+#     pickle.dump(np.array(dataset_algorithm_one_hot_list), f)

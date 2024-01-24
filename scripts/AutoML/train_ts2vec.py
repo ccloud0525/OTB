@@ -7,7 +7,7 @@ import pickle
 
 import pandas as pd
 import torch
-
+import pickle
 from ts_benchmark.utils.random_utils import fix_random_seed
 import time
 import datetime
@@ -79,6 +79,12 @@ if __name__ == "__main__":
         default=None,
         help="The maximum allowed number of threads used by this process",
     )
+    parser.add_argument(
+        "--max-pred-len",
+        type=int,
+        default=48,
+        help="The maximum pred-len in univariate forecasting",
+    )
     parser.add_argument("--ratio", nargs="+", type=float, default=[0.6, 0.2, 0.2])
 
     args = parser.parse_args()
@@ -91,12 +97,15 @@ if __name__ == "__main__":
     dataset_algorithm = np.load(
         "../../single_forecast_result/dataset_algorithm.npy", allow_pickle=True
     )
+
+    # with open("../../single_forecast_result/dataset_algorithm.pkl", "rb") as f:
+    #     dataset_algorithm = pickle.load(f)
     dataset_path = "../../single_forecast_result/chosen_datasets"
     dataset_list = []
 
     for dataset, algorithm in dataset_algorithm:
         data = pd.read_csv(os.path.join(dataset_path, dataset))
-        df = data[["data"]][-args.sample_num :]
+        df = data[["data"]][-(args.sample_num + args.max_pred_len) : -args.max_pred_len]
         dataset_list.append(df.values)
 
     dataset = np.concatenate(dataset_list, axis=1)
@@ -106,7 +115,7 @@ if __name__ == "__main__":
     data, train_slice, valid_slice, test_slice, scaler = datautils.process_data(
         dataset, args.ratio
     )
-    train_data = data[:, train_slice]
+    train_data = data[:, train_slice, :]
 
     print("done")
 

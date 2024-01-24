@@ -411,6 +411,9 @@ from darts.models import (
     TiDEModel,
     NaiveDrift,
     VARIMA,
+    NaiveMean,
+    NaiveSeasonal,
+    NaiveMovingAverage,
 )
 from sklearn.preprocessing import StandardScaler
 
@@ -485,7 +488,7 @@ class DartsModelAdapter:
         #             "Multi-gpu training is not supported, using only gpu %s",
         #             self.model_args["pl_trainer_kwargs"]["devices"],
         #         )
-        if self.model_name == "VARIMA":
+        if self.model_name == "VARIMA" or "RegressionModel":
             self.model = self.model_class(**self.model_args)
             self.scaler.fit(series.values)
             train_data_value = pd.DataFrame(self.scaler.transform(series.values),
@@ -644,11 +647,9 @@ DARTS_MODELS = [
     # (CatBoostModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
     # (LightGBMModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
     (LightGBMModel, DARTS_DEEP_MODEL_REQUIRED_ARGS3, {}),
-    (LinearRegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
+    (LinearRegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, {}),
     (RegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, {}),
-
     (TiDEModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, DARTS_DEEP_MODEL_ARGS),
-
     # (RegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
 ]
 
@@ -666,6 +667,9 @@ DARTS_STAT_MODELS = [
     (FourTheta, {}, {}),
     (Croston, {}, {}),
     (NaiveDrift, {}, {}),
+    (NaiveMean, {}, {}),
+    (NaiveSeasonal, {}, {}),
+    (NaiveMovingAverage, {}, {}),
 ]
 
 # 针对 DARTS_MODELS 中的每个模型类和所需参数生成模型工厂并添加到全局变量中

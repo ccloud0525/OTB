@@ -20,7 +20,7 @@ META_DETECTION_DATA_PATH = os.path.join(ROOT_PATH, "dataset", "ad", "DETECT_META
 #
 # 构建数据集文件夹的路径
 # DATASET_PATH = os.path.join(ROOT_PATH, "dataset", "ad", "ad_univariate_datasets")
-DATASET_PATH = os.path.join(ROOT_PATH, "dataset", "forecast", "2000")
+DATASET_PATH = os.path.join(ROOT_PATH,  "dataset")
 
 # # 构建元数据文件的路径
 # META_FORECAST_DATA_PATH = os.path.join(ROOT_PATH, "dataset", "formal_forecast", "FORECAST_META.csv")

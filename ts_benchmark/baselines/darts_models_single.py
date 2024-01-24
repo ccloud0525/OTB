@@ -411,6 +411,9 @@ from darts.models import (
     TiDEModel,
     NaiveDrift,
     VARIMA,
+    NaiveMean,
+    NaiveSeasonal,
+    NaiveMovingAverage,
 )
 from sklearn.preprocessing import StandardScaler
 
@@ -493,8 +496,8 @@ class DartsModelAdapter:
             # train_data_value = pd.DataFrame(self.scaler.transform(series.values),
             #                                 columns=series.columns,
             #                                 index=series.index)
-            # train_data = TimeSeries.from_dataframe(train_data_value)
-            train_data = series
+            train_data = TimeSeries.from_dataframe(series)
+            # train_data = series
             return self.model.fit(train_data)
         else:
             # self.scaler.fit(series.values)
@@ -626,7 +629,7 @@ DARTS_MODELS = [
     (
         TFTModel,
         DARTS_DEEP_MODEL_REQUIRED_ARGS1,
-        DARTS_DEEP_MODEL_ARGS,
+        {},
     ),
     (TransformerModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, DARTS_DEEP_MODEL_ARGS),
     (NHiTSModel, DARTS_DEEP_MODEL_REQUIRED_ARGS1, DARTS_DEEP_MODEL_ARGS),
@@ -643,7 +646,7 @@ DARTS_MODELS = [
     # (CatBoostModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
     # (LightGBMModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
     (LightGBMModel, DARTS_DEEP_MODEL_REQUIRED_ARGS3, {}),
-    (LinearRegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
+    (LinearRegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, {}),
     (RegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, {}),
     # (RegressionModel, DARTS_DEEP_MODEL_REQUIRED_ARGS2, DARTS_DEEP_MODEL_ARGS),
 ]
@@ -662,6 +665,9 @@ DARTS_STAT_MODELS = [
     (FourTheta, {}, {}),
     (Croston, {}, {}),
     (NaiveDrift, {}, {}),
+    (NaiveMean, {}, {}),
+    (NaiveSeasonal, {}, {}),
+    (NaiveMovingAverage, {}, {}),
 ]
 
 # 针对 DARTS_MODELS 中的每个模型类和所需参数生成模型工厂并添加到全局变量中

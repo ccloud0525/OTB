@@ -31,3 +31,4 @@ ALGORITHMS = {
     29: "darts_lightgbmmodel",
     30: "darts_statsforecastautoces",
 }
+

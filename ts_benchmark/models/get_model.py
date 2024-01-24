@@ -48,7 +48,7 @@ def get_model_info(model_config: dict) -> Any:
         if adapter_name not in ADAPTER:
             raise ValueError(f"Unknown adapter {adapter_name}")
         model_info = import_model_info(ADAPTER[adapter_name])(model_info)
-        
+
     return model_info
 
 
@@ -86,7 +86,10 @@ class ModelFactory:
     """
 
     def __init__(
-        self, model_name: str, model_factory: Type, model_hyper_params: dict,
+        self,
+        model_name: str,
+        model_factory: Type,
+        model_hyper_params: dict,
     ):
         """
         初始化 ModelFactory 对象。
@@ -120,8 +123,16 @@ def get_model(all_model_config: dict) -> list:
     model_factory_list = []  # 存储模型工厂的列表
     # 遍历每个模型配置
     for model_config in all_model_config["models"]:
-        model_info = get_model_info(model_config)  # 获取模型信息
         fallback_model_name = model_config["model_name"].split(".")[-1]
+        if fallback_model_name == "ensemble":
+            model_hyper_params = all_model_config["recommend_model_hyper_params"]
+
+            model_factory_list.append(
+                ModelFactory(fallback_model_name, None, model_hyper_params)
+            )
+            continue
+
+        model_info = get_model_info(model_config)  # 获取模型信息
 
         # 解析模型信息
         if isinstance(model_info, dict):
@@ -147,5 +158,7 @@ def get_model(all_model_config: dict) -> list:
             model_config,
         )
         # 添加模型工厂到列表
-        model_factory_list.append(ModelFactory(model_name, model_factory, model_hyper_params))
+        model_factory_list.append(
+            ModelFactory(model_name, model_factory, model_hyper_params)
+        )
     return model_factory_list
