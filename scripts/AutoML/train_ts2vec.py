@@ -95,12 +95,12 @@ if __name__ == "__main__":
     device = init_dl_program(args.gpu, seed=args.seed, max_threads=args.max_threads)
 
     dataset_algorithm = np.load(
-        "../../single_forecast_result/dataset_algorithm.npy", allow_pickle=True
+        "single_forecast_result/dataset_algorithm.npy", allow_pickle=True
     )
 
     # with open("../../single_forecast_result/dataset_algorithm.pkl", "rb") as f:
     #     dataset_algorithm = pickle.load(f)
-    dataset_path = "../../single_forecast_result/chosen_datasets"
+    dataset_path = "single_forecast_result/chosen_datasets"
     dataset_list = []
 
     for dataset, algorithm in dataset_algorithm:
@@ -163,10 +163,10 @@ if __name__ == "__main__":
         data_alg.append([data, algorithm])
 
     print("Finished.")
-    with open("data.pkl", "wb") as f:
+    with open("single_forecast_result/data.pkl", "wb") as f:
         pickle.dump(data_alg, f)
 
-    with open("data.pkl", "rb") as f:
+    with open("single_forecast_result/data.pkl", "rb") as f:
         loaded_data = pickle.load(f)
 
     print(loaded_data)

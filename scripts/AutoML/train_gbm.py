@@ -23,7 +23,7 @@ fix_random_seed()
 torch.set_num_threads(3)
 
 if __name__ == "__main__":
-    with open("data.pkl", "rb") as f:
+    with open("single_forecast_result/data.pkl", "rb") as f:
         loaded_data = pickle.load(f)
     params = {
         "boosting_type": "gbdt",
