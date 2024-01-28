@@ -10,3 +10,4 @@ venv/
 scripts/for_test
 scripts/AutoML/ckpt
 scripts/AutoML/single_forecast_result
+AutoML.assets/

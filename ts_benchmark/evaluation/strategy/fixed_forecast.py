@@ -130,7 +130,9 @@ class FixedForecast(Strategy):
             start_fit_time = time.time()
             if model_factory.model_name == "ensemble":
                 model = EnsembleModel(
-                    raw_model_factory=model_factory, dataset=data, top_k=5
+                    recommend_model_hyper_params=model_factory.model_hyper_params,
+                    dataset=data,
+                    top_k=5,
                 )
                 model.forecast_fit(train, 0.875)
                 end_fit_time = time.time()

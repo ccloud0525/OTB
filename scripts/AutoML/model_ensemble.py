@@ -10,12 +10,14 @@ from ts_benchmark.models.get_model import get_model
 
 
 class EnsembleModel:
-    def __init__(self, raw_model_factory, dataset, pred_len=48, sample_len=24, top_k=5):
+    def __init__(
+        self, recommend_model_hyper_params, dataset, pred_len=48, sample_len=24, top_k=5
+    ):
         self.top_k = top_k
         self.dataset = dataset
         self.pred_len = pred_len
         self.sample_len = sample_len
-        self.raw_model_factory = raw_model_factory
+        self.recommend_model_hyper_params = recommend_model_hyper_params
         self.trained_models = []
 
         self.__compile()
@@ -25,9 +27,7 @@ class EnsembleModel:
         device = init_dl_program(0, seed=301, max_threads=None)
         data = self.dataset.reset_index(drop=True)
         np_data = data.values
-        data, train_slice, valid_slice, test_slice, scaler = process_data(
-            np_data, [0.6, 0.2, 0.2]
-        )
+        data, _, _, _, _ = process_data(np_data)
 
         config = dict(
             batch_size=8,
@@ -93,7 +93,7 @@ class EnsembleModel:
             )
             model_config[
                 "recommend_model_hyper_params"
-            ] = self.raw_model_factory.model_hyper_params
+            ] = self.recommend_model_hyper_params
 
         self.model_factory_lst = get_model(model_config)
 

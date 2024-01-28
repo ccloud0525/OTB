@@ -143,7 +143,7 @@ def _get_time_features(dt):
     ).astype(np.float)
 
 
-def process_data(dataset, ratio):
+def process_data(dataset, ratio=[0.6, 0.2, 0.2]):
     train_ratio, val_ratio, test_ratio = ratio
 
     data = dataset
