@@ -16,7 +16,7 @@ from ts_benchmark.evaluation.strategy.strategy import Strategy
 from ts_benchmark.models.get_model import ModelFactory
 from ts_benchmark.utils.data_processing import split_before
 from ts_benchmark.utils.random_utils import fix_random_seed
-from scripts.AutoML.model_ensemble import model_ensemble
+from scripts.AutoML.model_ensemble import EnsembleModel
 from ts_benchmark.models.get_model import get_model
 
 
@@ -116,7 +116,6 @@ class FixedForecast(Strategy):
 
         try:
             data = DataPool().get_series(series_name)
-            variable_num = data.shape[-1]
             train_length = len(data) - self.pred_len
             if train_length <= 0:
                 raise ValueError("The prediction step exceeds the data length")
@@ -130,63 +129,12 @@ class FixedForecast(Strategy):
 
             start_fit_time = time.time()
             if model_factory.model_name == "ensemble":
-                model_name_lst = model_ensemble(
-                    data, k=5, pred_len=self.pred_len, sample_len=24
+                model = EnsembleModel(
+                    raw_model_factory=model_factory, dataset=data, top_k=5
                 )
-                model_config = {"models": []}
-                adapter_lst = []
-                new_model_name_lst = []
-
-                for model_name in model_name_lst:
-                    if "darts" in model_name:
-                        adapter = None
-                        model_name = (
-                            "ts_benchmark.baselines.darts_models_single." + model_name
-                        )
-                    else:
-                        adapter = "transformer_adapter_single"
-                        model_name = (
-                            "ts_benchmark.baselines.time_series_library."
-                            + model_name
-                            + "."
-                            + model_name
-                        )
-                    adapter_lst.append(adapter)
-
-                    new_model_name_lst.append(model_name)
-
-                for adapter, model_name, model_hyper_params in zip(
-                    adapter_lst, new_model_name_lst, new_model_name_lst
-                ):
-                    model_config["models"].append(
-                        {
-                            "adapter": adapter if adapter is not None else None,
-                            "model_name": model_name,
-                            "model_hyper_params": {},
-                        }
-                    )
-                    model_config[
-                        "recommend_model_hyper_params"
-                    ] = model_factory.model_hyper_params
-
-                model_factory_lst = get_model(model_config)
-
-                predict = np.zeros((self.pred_len, variable_num))
-                actual_num = 0
-                for model_factory in model_factory_lst:
-                    model = model_factory()
-                    if hasattr(model, "forecast_fit"):
-                        model.forecast_fit(train, 0.875)  # 在训练数据上拟合模型
-                    else:
-                        model.fit(train, 0.875)  # 在训练数据上拟合模型
-                    end_fit_time = time.time()
-                    temp = model.forecast(self.pred_len, train)
-                    if np.any(np.isnan(temp)):
-                        continue
-                    predict += temp  # 预测未来数据
-                    actual_num += 1
-
-                predict /= actual_num
+                model.forecast_fit(train, 0.875)
+                end_fit_time = time.time()
+                predict = model.forecast(self.pred_len, train)
 
             else:
                 model = model_factory()
