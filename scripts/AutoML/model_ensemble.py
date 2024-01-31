@@ -1,33 +1,179 @@
 import lightgbm as lgb
 import pandas as pd
-from .ts2vec_model.datautils import process_data
 from .ts2vec import TS2Vec
 from .ts2vec_model.utils import init_dl_program
 import numpy as np
 from .ALGORITHMS import ALGORITHMS
 import os
 from ts_benchmark.models.get_model import get_model
+from sklearn.preprocessing import StandardScaler
+import torch
+from torch import nn
+from ts_benchmark.baselines.utils import train_val_split
+from torch.utils.data import DataLoader, Dataset
+from ts_benchmark.baselines.time_series_library.utils.tools import EarlyStopping
 
 
-class EnsembleModel:
+class EnsembleDataset(Dataset):
+    def __init__(self, X, Y):
+        # 初始化数据集，这里我们假设数据是CSV文件，您需要根据您的数据集进行调整
+        super(EnsembleDataset, self).__init__()
+        self.X = X
+        self.Y = Y
+
+    def __getitem__(self, index):
+        # 获取数据样本，这里我们假设每个样本都是一个字典，您需要根据您的数据集进行调整
+
+        return self.X[index], self.Y[index]
+
+    def __len__(self):
+        # 返回数据集的大小
+        return len(self.X)
+
+
+class EnsembleModelAdapter:
     def __init__(
-        self, recommend_model_hyper_params, dataset, pred_len=48, sample_len=24, top_k=5
+        self,
+        recommend_model_hyper_params,
+        dataset,
+        sample_len=24,
+        top_k=5,
+        ensemble="mean",
+        batch_size=8,
+        lr=0.001,
+        epochs=10,
     ):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        self.EnsembleModel = EnsembleModel(
+            recommend_model_hyper_params,
+            dataset,
+            self.device,
+            sample_len,
+            top_k,
+        )
+        self.ensemble = ensemble
+        self.optimizer = torch.optim.Adam(self.EnsembleModel.weight, lr=lr)
+        self.criterion = nn.MSELoss()
+        self.recommend_model_hyper_params = recommend_model_hyper_params
+        self.batch_size = batch_size
+        self.epochs = epochs
+
+    def _data_process(self, train: pd.DataFrame, ratio: float):
+        horizon_len = self.recommend_model_hyper_params["input_chunk_length"]
+        pred_len = self.recommend_model_hyper_params["output_chunk_length"]
+        train_data, val_data = train_val_split(train, ratio, None)
+        train_x = [
+            train_data.iloc[i : i + horizon_len]
+            for i in range(0, train_data.shape[0] - pred_len - horizon_len)
+        ]
+        train_y = [
+            torch.tensor(
+                train_data.iloc[i + horizon_len : i + horizon_len + pred_len].values
+            )
+            for i in range(0, train_data.shape[0] - pred_len - horizon_len)
+        ]
+
+        val_x = [
+            val_data.iloc[i : i + horizon_len]
+            for i in range(0, val_data.shape[0] - pred_len - horizon_len)
+        ]
+        val_y = [
+            torch.tensor(
+                val_data.iloc[i + horizon_len : i + horizon_len + pred_len].values
+            )
+            for i in range(0, val_data.shape[0] - pred_len - horizon_len)
+        ]
+
+        train_x_list = [
+            torch.tensor(self.EnsembleModel.forecast(pred_len, x)) for x in train_x
+        ]
+
+        val_x_list = [
+            torch.tensor(self.EnsembleModel.forecast(pred_len, x)) for x in val_x
+        ]
+
+        train_x = torch.stack(train_x_list)
+        val_x = torch.stack(val_x_list)
+
+        self.train_dataset = EnsembleDataset(train_x, train_y)
+        self.train_loader = DataLoader(
+            self.train_dataset, batch_size=self.batch_size, shuffle=True
+        )
+
+        self.val_dataset = EnsembleDataset(val_x, val_y)
+        self.val_loader = DataLoader(self.val_dataset, batch_size=1, shuffle=False)
+
+    def learn_ensemble_weight(self, train: pd.DataFrame, ratio: float):
+        if self.ensemble == "mean":
+            return
+        elif self.ensemble == "learn":
+            self.EnsembleModel.to(self.device)
+        else:
+            raise ValueError("ensemble type error")
+
+        self._data_process(train, ratio)
+        self.EnsembleModel.train()
+        self.early_stop = EarlyStopping(patience=3)
+
+        for epoch in range(self.epochs):
+            for x, y in self.train_loader:
+                self.optimizer.zero_grad()
+                y_pred = self.EnsembleModel(x)
+                loss = self.criterion(y_pred, y)
+                loss.backward()
+                self.optimizer.step()
+            valid_loss = self._validate()
+            self.early_stop(valid_loss, self.EnsembleModel)
+            if self.early_stop.early_stop:
+                break
+
+    def _validate(self):
+        self.EnsembleModel.eval()
+        total_loss = []
+        with torch.no_grad():
+            for x, y in self.val_loader:
+                y_pred = self.EnsembleModel(x)
+                loss = self.criterion(y_pred, y)
+                total_loss.append(loss)
+
+            return np.mean(total_loss)
+
+    def forecast_fit(self, train: pd.DataFrame, ratio: float):
+        self.EnsembleModel.forecast_fit(train, ratio)
+
+    def forecast(self, pred_len: int, train: pd.DataFrame):
+        return self.EnsembleModel.weighted_forecast(pred_len, train)
+
+
+class EnsembleModel(nn.Module):
+    def __init__(
+        self, recommend_model_hyper_params, dataset, device, sample_len=24, top_k=5
+    ):
+        super().__init__()
         self.top_k = top_k
         self.dataset = dataset
-        self.pred_len = pred_len
         self.sample_len = sample_len
         self.recommend_model_hyper_params = recommend_model_hyper_params
         self.trained_models = []
+        self.device = device
+        self._compile()
+        self._parse()
 
-        self.__compile()
-        self.__parse()
+        self.weight = nn.Parameter(torch.rand(len(self.trained_models)))
+        nn.init.constant_(self.weight, 1 / len(self.trained_models))
 
-    def __compile(self):
+    def _compile(self):
         device = init_dl_program(0, seed=301, max_threads=None)
-        data = self.dataset.reset_index(drop=True)
-        np_data = data.values
-        data, _, _, _, _ = process_data(np_data)
+        train_data = self.dataset.reset_index(drop=True)
+        np_data = train_data.values
+
+        scaler = StandardScaler().fit(np_data)
+        train_data = scaler.transform(np_data)
+        train_data = np.transpose(train_data, (1, 0))
+
+        if train_data.ndim != 3:
+            train_data = np.expand_dims(train_data, axis=-1)
 
         config = dict(
             batch_size=8,
@@ -35,7 +181,8 @@ class EnsembleModel:
             output_dims=320,
             max_train_length=3000,
         )
-        sample_data = data[:, -(self.sample_len + self.pred_len) : -self.pred_len, :]
+
+        sample_data = train_data[:, -self.sample_len :, ...]
         model = TS2Vec(input_dims=sample_data.shape[-1], device=device, **config)
         current_dir = os.path.dirname(os.path.abspath(__file__))
         model.load(os.path.join(current_dir, "ts2vec_model/training/0118/model.pkl"))
@@ -60,7 +207,7 @@ class EnsembleModel:
         indices = get_index(pred, self.top_k)
         self.model_name_lst = [ALGORITHMS[index] for index in indices]
 
-    def __parse(self):
+    def _parse(self):
         model_config = {"models": []}
         adapter_lst = []
         new_model_name_lst = []
@@ -116,20 +263,52 @@ class EnsembleModel:
             except:
                 continue
 
+    def forward(self, X: torch.Tensor):
+        X = X.to(self.device)
+        logits = torch.Softmax(torch.matmul(self.weight, X))
+
+        return logits
+
     def forecast(self, pred_len: int, train: pd.DataFrame):
-        variable_num = train.shape[-1]
-        predict = np.zeros((pred_len, variable_num))
-        actual_num = 0
+        predict_list = []
         for model in self.trained_models:
             try:
                 temp = model.forecast(pred_len, train)
-            except:
+
+            except Exception as e:
+                import traceback as tb
+
+                tb.print_exc()
+                print(f"{repr(model)}:{str(e)}")
                 continue
 
             if np.any(np.isnan(temp)):
                 continue
-            predict += temp  # 预测未来数据
-            actual_num += 1
+            predict_list.append(temp)  # 预测未来数据
+            print(f"{repr(model)}")
+            print(temp)
 
-        predict /= actual_num
+        return np.array(predict_list)
+
+    def weighted_forecast(self, pred_len: int, train: pd.DataFrame):
+        predict_list = []
+        for model in self.trained_models:
+            try:
+                temp = model.forecast(pred_len, train)
+
+            except Exception as e:
+                import traceback as tb
+
+                tb.print_exc()
+                print(f"{repr(model)}:{str(e)}")
+                continue
+
+            if np.any(np.isnan(temp)):
+                continue
+            predict_list.append(temp)  # 预测未来数据
+            print(f"{repr(model)}")
+            print(temp)
+        predict = torch.tensor(np.array(predict_list)).to(self.device)
+        logits = torch.Softmax(torch.matmul(self.weight, predict))
+        predict = logits.detach().cpu().numpy()
         return predict

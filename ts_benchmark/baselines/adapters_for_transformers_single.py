@@ -20,14 +20,14 @@ DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "c_out": 1,
     "e_layers": 2,
     "d_layers": 1,
-    "d_model": 32,
-    "d_ff": 32,
+    "d_model": 64,
+    "d_ff": 64,
     "embed": "timeF",
     "freq": "h",
     "lradj": "type1",
     "moving_avg": 25,
     "num_kernels": 6,
-    "factor": 1,
+    "factor": 3,
     "n_heads": 8,
     "seg_len": 6,
     "win_size": 2,
@@ -36,9 +36,9 @@ DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "patch_len": 4,
     "stride": 2,
     "dropout": 0.1,
-    "batch_size": 16,
+    "batch_size": 8,
     "lr": 0.001,
-    "num_epochs": 5,
+    "num_epochs": 10,
     "num_workers": 0,
     "loss": "MSE",
     "itr": 1,
@@ -49,7 +49,6 @@ DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "p_hidden_layers": 2,
     "mem_dim": 32,
     "conv_kernel": [12, 16],
-
 }
 
 
@@ -124,8 +123,6 @@ class TransformerAdapter_single:
         test = pd.concat([test, new_df])
         return test
 
-
-
     def forecast_fit(self, train_data: pd.DataFrame, ratio):
         """
         训练模型。
@@ -134,10 +131,13 @@ class TransformerAdapter_single:
         """
         self.hyper_param_tune(train_data)
         self.model = self.model_class(self.config)
-        print("----------------------------------------------------------", self.model_name)
+        print(
+            "----------------------------------------------------------",
+            self.model_name,
+        )
         config = self.config
         #
-        dataset_info = str(train_data.shape) + str(train_data.iloc[0,0])
+        dataset_info = str(train_data.shape) + str(train_data.iloc[0, 0])
         #
         # self.scaler.fit(train_data.values)
         #
@@ -168,10 +168,10 @@ class TransformerAdapter_single:
         )
 
         print(f"Total trainable parameters: {total_params}")
-        saved_str = f"{dataset_info}; {self.model_name} {str(vars(self.config))} Total trainable parameters: {total_params}\n"
-        save_log_path = os.path.join(ROOT_PATH, "result/univariate_forecast.txt")
-        with open(save_log_path, 'a') as file:
-            file.write(saved_str)
+        # saved_str = f"{dataset_info}; {self.model_name} {str(vars(self.config))} Total trainable parameters: {total_params}\n"
+        # save_log_path = os.path.join(ROOT_PATH, "result/univariate_forecast.txt")
+        # with open(save_log_path, 'a') as file:
+        #     file.write(saved_str)
         # print(self.model.state_dict())
 
         for epoch in range(config.num_epochs):
@@ -225,8 +225,6 @@ class TransformerAdapter_single:
 
         # 生成transformer类方法需要的额外时间戳mark
         test = self.padding_data_for_forecast(test)
-
-
 
         test_data_set, test_data_loader = data_provider(
             test, config, timeenc=1, batch_size=1, shuffle=False, drop_last=False

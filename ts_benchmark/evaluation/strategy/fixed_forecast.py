@@ -131,8 +131,9 @@ class FixedForecast(Strategy):
             if model_factory.model_name == "ensemble":
                 model = EnsembleModel(
                     recommend_model_hyper_params=model_factory.model_hyper_params,
-                    dataset=data,
+                    dataset=train,
                     top_k=5,
+                    device='cuda'
                 )
                 model.forecast_fit(train, 0.875)
                 end_fit_time = time.time()
