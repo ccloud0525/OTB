@@ -12,6 +12,7 @@ from torch import nn
 from ts_benchmark.baselines.utils import train_val_split
 from torch.utils.data import DataLoader, Dataset
 from ts_benchmark.baselines.time_series_library.utils.tools import EarlyStopping
+import torch.nn.functional as F
 
 
 class EnsembleDataset(Dataset):
@@ -53,64 +54,71 @@ class EnsembleModelAdapter:
             top_k,
         )
         self.ensemble = ensemble
-        self.optimizer = torch.optim.Adam(self.EnsembleModel.weight, lr=lr)
         self.criterion = nn.MSELoss()
         self.recommend_model_hyper_params = recommend_model_hyper_params
         self.batch_size = batch_size
         self.epochs = epochs
+        self.lr = lr
 
     def _data_process(self, train: pd.DataFrame, ratio: float):
         horizon_len = self.recommend_model_hyper_params["input_chunk_length"]
         pred_len = self.recommend_model_hyper_params["output_chunk_length"]
-        train_data, val_data = train_val_split(train, ratio, None)
+        length = int(len(train) * (1 - ratio))
+        if length < horizon_len + pred_len:
+            if len(train) - length < horizon_len + pred_len:
+                raise ValueError("数据集过短，无法进行训练")
+            else:
+                train_data = train
+                self.val_loader = None
+        else:
+            train_data, val_data = train_val_split(train, ratio, None)
+            val_x = [
+                val_data.iloc[i : i + horizon_len]
+                for i in range(0, val_data.shape[0] - pred_len - horizon_len)
+            ]
+            val_y = [
+                torch.FloatTensor(
+                    val_data.iloc[i + horizon_len : i + horizon_len + pred_len].values
+                )
+                for i in range(0, val_data.shape[0] - pred_len - horizon_len)
+            ]
+            val_x_list = [
+                torch.FloatTensor(self.EnsembleModel.forecast(pred_len, x))
+                for x in val_x
+            ]
+            val_x = torch.stack(val_x_list, dim=0)
+            self.val_dataset = EnsembleDataset(val_x, val_y)
+            self.val_loader = DataLoader(self.val_dataset, batch_size=1, shuffle=False)
+
         train_x = [
             train_data.iloc[i : i + horizon_len]
             for i in range(0, train_data.shape[0] - pred_len - horizon_len)
         ]
         train_y = [
-            torch.tensor(
+            torch.FloatTensor(
                 train_data.iloc[i + horizon_len : i + horizon_len + pred_len].values
             )
             for i in range(0, train_data.shape[0] - pred_len - horizon_len)
         ]
 
-        val_x = [
-            val_data.iloc[i : i + horizon_len]
-            for i in range(0, val_data.shape[0] - pred_len - horizon_len)
-        ]
-        val_y = [
-            torch.tensor(
-                val_data.iloc[i + horizon_len : i + horizon_len + pred_len].values
-            )
-            for i in range(0, val_data.shape[0] - pred_len - horizon_len)
-        ]
-
         train_x_list = [
-            torch.tensor(self.EnsembleModel.forecast(pred_len, x)) for x in train_x
+            torch.FloatTensor(self.EnsembleModel.forecast(pred_len, x)) for x in train_x
         ]
 
-        val_x_list = [
-            torch.tensor(self.EnsembleModel.forecast(pred_len, x)) for x in val_x
-        ]
-
-        train_x = torch.stack(train_x_list)
-        val_x = torch.stack(val_x_list)
+        train_x = torch.stack(train_x_list, dim=0)
 
         self.train_dataset = EnsembleDataset(train_x, train_y)
         self.train_loader = DataLoader(
             self.train_dataset, batch_size=self.batch_size, shuffle=True
         )
 
-        self.val_dataset = EnsembleDataset(val_x, val_y)
-        self.val_loader = DataLoader(self.val_dataset, batch_size=1, shuffle=False)
-
     def learn_ensemble_weight(self, train: pd.DataFrame, ratio: float):
         if self.ensemble == "mean":
             return
-        elif self.ensemble == "learn":
-            self.EnsembleModel.to(self.device)
-        else:
+        elif self.ensemble != "learn":
             raise ValueError("ensemble type error")
+
+        self.optimizer = torch.optim.Adam([self.EnsembleModel.weight], lr=self.lr)
 
         self._data_process(train, ratio)
         self.EnsembleModel.train()
@@ -120,13 +128,15 @@ class EnsembleModelAdapter:
             for x, y in self.train_loader:
                 self.optimizer.zero_grad()
                 y_pred = self.EnsembleModel(x)
+                y = y.to(self.device)
                 loss = self.criterion(y_pred, y)
                 loss.backward()
                 self.optimizer.step()
-            valid_loss = self._validate()
-            self.early_stop(valid_loss, self.EnsembleModel)
-            if self.early_stop.early_stop:
-                break
+            if self.val_loader is not None:
+                valid_loss = self._validate()
+                self.early_stop(valid_loss, self.EnsembleModel)
+                if self.early_stop.early_stop:
+                    break
 
     def _validate(self):
         self.EnsembleModel.eval()
@@ -134,8 +144,9 @@ class EnsembleModelAdapter:
         with torch.no_grad():
             for x, y in self.val_loader:
                 y_pred = self.EnsembleModel(x)
+                y = y.to(self.device)
                 loss = self.criterion(y_pred, y)
-                total_loss.append(loss)
+                total_loss.append(loss.item())
 
             return np.mean(total_loss)
 
@@ -159,9 +170,6 @@ class EnsembleModel(nn.Module):
         self.device = device
         self._compile()
         self._parse()
-
-        self.weight = nn.Parameter(torch.rand(len(self.trained_models)))
-        nn.init.constant_(self.weight, 1 / len(self.trained_models))
 
     def _compile(self):
         device = init_dl_program(0, seed=301, max_threads=None)
@@ -263,11 +271,23 @@ class EnsembleModel(nn.Module):
             except:
                 continue
 
+        pred_len = self.recommend_model_hyper_params["output_chunk_length"]
+        self.weight = nn.Parameter(
+            torch.rand(
+                len(self.trained_models),
+                pred_len,
+            ),
+            requires_grad=False,
+        ).to(self.device)
+        self.weight.requires_grad = True
+        nn.init.constant_(self.weight, 1 / len(self.trained_models))
+
     def forward(self, X: torch.Tensor):
         X = X.to(self.device)
-        logits = torch.Softmax(torch.matmul(self.weight, X))
-
-        return logits
+        weighted_predict = torch.einsum(
+            "ij,nijl->njl", F.softmax(self.weight, dim=0), X
+        )
+        return weighted_predict
 
     def forecast(self, pred_len: int, train: pd.DataFrame):
         predict_list = []
@@ -285,8 +305,8 @@ class EnsembleModel(nn.Module):
             if np.any(np.isnan(temp)):
                 continue
             predict_list.append(temp)  # 预测未来数据
-            print(f"{repr(model)}")
-            print(temp)
+            # print(f"{repr(model)}")
+            # print(temp)
 
         return np.array(predict_list)
 
@@ -308,7 +328,10 @@ class EnsembleModel(nn.Module):
             predict_list.append(temp)  # 预测未来数据
             print(f"{repr(model)}")
             print(temp)
-        predict = torch.tensor(np.array(predict_list)).to(self.device)
-        logits = torch.Softmax(torch.matmul(self.weight, predict))
-        predict = logits.detach().cpu().numpy()
+        predict = torch.FloatTensor(np.array(predict_list)).to(self.device)
+        weighted_predict = torch.einsum(
+            "ij,ijl->jl", F.softmax(self.weight, dim=0), predict
+        )
+
+        predict = weighted_predict.detach().cpu().numpy()
         return predict

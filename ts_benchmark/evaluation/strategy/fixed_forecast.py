@@ -16,8 +16,7 @@ from ts_benchmark.evaluation.strategy.strategy import Strategy
 from ts_benchmark.models.get_model import ModelFactory
 from ts_benchmark.utils.data_processing import split_before
 from ts_benchmark.utils.random_utils import fix_random_seed
-from scripts.AutoML.model_ensemble import EnsembleModel
-from ts_benchmark.models.get_model import get_model
+from scripts.AutoML.model_ensemble import EnsembleModelAdapter
 
 
 class FixedForecast(Strategy):
@@ -129,13 +128,17 @@ class FixedForecast(Strategy):
 
             start_fit_time = time.time()
             if model_factory.model_name == "ensemble":
-                model = EnsembleModel(
+                model = EnsembleModelAdapter(
                     recommend_model_hyper_params=model_factory.model_hyper_params,
                     dataset=train,
                     top_k=5,
-                    device='cuda'
+                    ensemble="mean",
+                    batch_size=4,
+                    lr=0.001,
+                    epochs=30,
                 )
                 model.forecast_fit(train, 0.875)
+                model.learn_ensemble_weight(train, 0.875)
                 end_fit_time = time.time()
                 predict = model.forecast(self.pred_len, train)
 
