@@ -1,7 +1,6 @@
 import lightgbm as lgb
 import pandas as pd
 from .ts2vec import TS2Vec
-from .ts2vec_model.utils import init_dl_program
 import numpy as np
 from .ALGORITHMS import ALGORITHMS
 import os
@@ -10,10 +9,26 @@ from sklearn.preprocessing import StandardScaler
 import torch
 from torch import nn
 from ts_benchmark.baselines.utils import train_val_split
-from ts_benchmark.utils.data_processing import split_before
 from torch.utils.data import DataLoader, Dataset
 from ts_benchmark.baselines.time_series_library.utils.tools import EarlyStopping
 import torch.nn.functional as F
+import random
+
+
+def set_seed(seed):
+    """
+    Fix all seeds
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    os.environ["PYTHONHASHSEED"] = str(seed)
+
+    torch.backends.cudnn.enabled = True
+    torch.backends.cudnn.benchmark = False
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.deterministic = True
 
 
 class EnsembleDataset(Dataset):
@@ -66,11 +81,12 @@ class EnsembleModelAdapter:
         pred_len = self.recommend_model_hyper_params["output_chunk_length"]
         length = int(len(train) * (1 - ratio))
         if length < horizon_len + pred_len:
-            if len(train) < 2 * (horizon_len + pred_len):
-                raise ValueError("数据集过短，无法进行训练")
-            else:
-                border = len(train) - horizon_len - pred_len
-                train_data, val_data = split_before(train, border)
+            # if len(train) < 2 * (horizon_len + pred_len):
+            #     raise ValueError("数据集过短，无法进行训练")
+            # else:
+            #     border = len(train) - horizon_len - pred_len
+            #     train_data, val_data = split_before(train, border)
+            raise ValueError("数据集过短，无法进行训练")
 
         else:
             train_data, val_data = train_val_split(train, ratio, None)
@@ -102,7 +118,6 @@ class EnsembleModelAdapter:
             self.train_dataset, batch_size=self.batch_size, shuffle=True
         )
 
-
     def learn_ensemble_weight(self, train: pd.DataFrame, ratio: float):
         if self.ensemble == "mean":
             return
@@ -119,7 +134,6 @@ class EnsembleModelAdapter:
             tb.print_exc()
             print(str(e))
 
-            self.ensemble = "mean"
             return
 
         self.EnsembleModel.train()
@@ -142,7 +156,6 @@ class EnsembleModelAdapter:
 
         self.EnsembleModel.load_state_dict(self.early_stop.check_point)
 
-
     def _validate(self):
         self.EnsembleModel.eval()
         total_loss = []
@@ -155,10 +168,8 @@ class EnsembleModelAdapter:
 
             return np.mean(total_loss)
 
-
     def forecast_fit(self, train: pd.DataFrame, ratio: float):
         self.EnsembleModel.forecast_fit(train, ratio)
-
 
     def forecast(self, pred_len: int, train: pd.DataFrame):
         return self.EnsembleModel.weighted_forecast(pred_len, train)
@@ -266,7 +277,13 @@ class EnsembleModel(nn.Module):
         return f"EnsembleModel_{self.top_k}"
 
     def forecast_fit(self, train: pd.DataFrame, ratio: float):
+        # model_factory_lst = [self.model_factory_lst[-2], self.model_factory_lst[-1]]
+        # rf = self.model_factory_lst[-2]
+        # nhits = self.model_factory_lst[-1]
+        # self.model_factory_lst[-1] = nhits
+        # self.model_factory_lst[-2] = rf
         for model_factory in self.model_factory_lst:
+            set_seed(2021)
             try:
                 model = model_factory()
                 if hasattr(model, "forecast_fit"):

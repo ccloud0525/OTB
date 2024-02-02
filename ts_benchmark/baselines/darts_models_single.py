@@ -535,13 +535,10 @@ class DartsModelAdapter:
     def inner_forecast_back(
         self, horizon_len: int, pred_len: int, data: pd.DataFrame
     ) -> np.ndarray:
-        x_list = [
-            data.iloc[i : i + horizon_len]
-            for i in range(0, data.shape[0] - pred_len - horizon_len + 1)
-        ]
 
         output = []
-        for x in x_list:
+        for i in range(0, data.shape[0] - pred_len - horizon_len + 1):
+            x=data.iloc[0: i + horizon_len]
             train = TimeSeries.from_dataframe(x)
             fsct_result = self.model.predict(pred_len, train).values()
             output.append(fsct_result)
