@@ -453,9 +453,7 @@ class DartsModelAdapter:
         self.allow_fit_on_eval = allow_fit_on_eval
         self.scaler = StandardScaler()
 
-    def forecast_fit(
-            self, series: pd.DataFrame, ratio
-    ) -> object:
+    def forecast_fit(self, series: pd.DataFrame, ratio) -> object:
         """
         在时间序列数据上拟合适配的 Darts 模型。
 
@@ -488,7 +486,10 @@ class DartsModelAdapter:
         #             "Multi-gpu training is not supported, using only gpu %s",
         #             self.model_args["pl_trainer_kwargs"]["devices"],
         #         )
-        print("----------------------------------------------------------", self.model_name)
+        print(
+            "----------------------------------------------------------",
+            self.model_name,
+        )
 
         if self.model_name == "VARIMA":
             self.model = self.model_class(**self.model_args)
@@ -509,9 +510,7 @@ class DartsModelAdapter:
             self.model = self.model_class(**self.model_args)
             train_data = TimeSeries.from_dataframe(train_data_value)
 
-
             return self.model.fit(train_data)
-
 
     def forecast(self, pred_len: int, train: pd.DataFrame) -> np.ndarray:
         """
@@ -532,6 +531,23 @@ class DartsModelAdapter:
         # predict = self.scaler.inverse_transform(predict)
 
         return predict
+
+    def inner_forecast_back(
+        self, horizon_len: int, pred_len: int, data: pd.DataFrame
+    ) -> np.ndarray:
+        x_list = [
+            data.iloc[i : i + horizon_len]
+            for i in range(0, data.shape[0] - pred_len - horizon_len + 1)
+        ]
+
+        output = []
+        for x in x_list:
+            train = TimeSeries.from_dataframe(x)
+            fsct_result = self.model.predict(pred_len, train).values()
+            output.append(fsct_result)
+
+        output = np.array(output, dtype=float)
+        return output
 
     # def forecast_fit(
     #     self, series: pd.DataFrame, val_series: pd.DataFrame = pd.DataFrame()
@@ -581,7 +597,11 @@ class DartsModelAdapter:
 
 
 def generate_model_factory(
-    model_name: str, model_class: object, model_args: dict, required_args: dict, allow_fit_on_eval: bool
+    model_name: str,
+    model_class: object,
+    model_args: dict,
+    required_args: dict,
+    allow_fit_on_eval: bool,
 ) -> Dict:
     """
     生成模型工厂信息，用于创建 Darts 模型适配器。
@@ -616,7 +636,10 @@ DARTS_DEEP_MODEL_REQUIRED_ARGS1 = {
     "output_chunk_length": "output_chunk_length",
 }
 DARTS_DEEP_MODEL_REQUIRED_ARGS2 = {"lags": "input_chunk_length"}
-DARTS_DEEP_MODEL_REQUIRED_ARGS3 = {"lags": "input_chunk_length", "output_chunk_length": "output_chunk_length"}
+DARTS_DEEP_MODEL_REQUIRED_ARGS3 = {
+    "lags": "input_chunk_length",
+    "output_chunk_length": "output_chunk_length",
+}
 DARTS_DEEP_MODEL_ARGS = {
     "pl_trainer_kwargs": {
         "enable_progress_bar": False,
@@ -676,7 +699,11 @@ for model_class, required_args, model_args in DARTS_MODELS:
         logger.warning("NotImportedModule encountered, skipping")
         continue
     globals()[f"darts_{model_class.__name__.lower()}"] = generate_model_factory(
-        model_class.__name__, model_class, model_args, required_args, allow_fit_on_eval=False
+        model_class.__name__,
+        model_class,
+        model_args,
+        required_args,
+        allow_fit_on_eval=False,
     )
 
 # 针对 DARTS_STAT_MODELS 中的每个模型类和所需参数生成模型工厂并添加到全局变量中
@@ -685,9 +712,12 @@ for model_class, required_args, model_args in DARTS_STAT_MODELS:
         logger.warning("NotImportedModule encountered, skipping")
         continue
     globals()[f"darts_{model_class.__name__.lower()}"] = generate_model_factory(
-        model_class.__name__, model_class, model_args, required_args, allow_fit_on_eval=True
+        model_class.__name__,
+        model_class,
+        model_args,
+        required_args,
+        allow_fit_on_eval=True,
     )
-
 
 # TODO：darts 应该不止这两个 adapter，例如有些应该输入 DARTS_DEEP_MODEL_REQUIRED_ARGS2
 #   而非 DARTS_DEEP_MODEL_REQUIRED_ARGS1。

@@ -10,6 +10,7 @@ from sklearn.preprocessing import StandardScaler
 import torch
 from torch import nn
 from ts_benchmark.baselines.utils import train_val_split
+from ts_benchmark.utils.data_processing import split_before
 from torch.utils.data import DataLoader, Dataset
 from ts_benchmark.baselines.time_series_library.utils.tools import EarlyStopping
 import torch.nn.functional as F
@@ -39,7 +40,7 @@ class EnsembleModelAdapter:
         dataset,
         sample_len=24,
         top_k=5,
-        ensemble="mean",
+        ensemble="learn",
         batch_size=8,
         lr=0.001,
         epochs=10,
@@ -65,52 +66,42 @@ class EnsembleModelAdapter:
         pred_len = self.recommend_model_hyper_params["output_chunk_length"]
         length = int(len(train) * (1 - ratio))
         if length < horizon_len + pred_len:
-            if len(train) - length < horizon_len + pred_len:
+            if len(train) < 2 * (horizon_len + pred_len):
                 raise ValueError("数据集过短，无法进行训练")
             else:
-                train_data = train
-                self.val_loader = None
+                border = len(train) - horizon_len - pred_len
+                train_data, val_data = split_before(train, border)
+
         else:
             train_data, val_data = train_val_split(train, ratio, None)
-            val_x = [
-                val_data.iloc[i : i + horizon_len]
-                for i in range(0, val_data.shape[0] - pred_len - horizon_len)
-            ]
-            val_y = [
-                torch.FloatTensor(
-                    val_data.iloc[i + horizon_len : i + horizon_len + pred_len].values
-                )
-                for i in range(0, val_data.shape[0] - pred_len - horizon_len)
-            ]
-            val_x_list = [
-                torch.FloatTensor(self.EnsembleModel.forecast(pred_len, x))
-                for x in val_x
-            ]
-            val_x = torch.stack(val_x_list, dim=0)
-            self.val_dataset = EnsembleDataset(val_x, val_y)
-            self.val_loader = DataLoader(self.val_dataset, batch_size=1, shuffle=False)
 
-        train_x = [
-            train_data.iloc[i : i + horizon_len]
-            for i in range(0, train_data.shape[0] - pred_len - horizon_len)
+        val_x = torch.FloatTensor(
+            self.EnsembleModel.inner_forecast_back(horizon_len, pred_len, val_data)
+        )
+        val_y = [
+            torch.FloatTensor(
+                val_data.iloc[i + horizon_len : i + horizon_len + pred_len].values
+            )
+            for i in range(0, val_data.shape[0] - pred_len - horizon_len + 1)
         ]
+        self.val_dataset = EnsembleDataset(val_x, val_y)
+        self.val_loader = DataLoader(self.val_dataset, batch_size=1, shuffle=False)
+
+        train_x = torch.FloatTensor(
+            self.EnsembleModel.inner_forecast_back(horizon_len, pred_len, train_data)
+        )
         train_y = [
             torch.FloatTensor(
                 train_data.iloc[i + horizon_len : i + horizon_len + pred_len].values
             )
-            for i in range(0, train_data.shape[0] - pred_len - horizon_len)
+            for i in range(0, train_data.shape[0] - pred_len - horizon_len + 1)
         ]
-
-        train_x_list = [
-            torch.FloatTensor(self.EnsembleModel.forecast(pred_len, x)) for x in train_x
-        ]
-
-        train_x = torch.stack(train_x_list, dim=0)
 
         self.train_dataset = EnsembleDataset(train_x, train_y)
         self.train_loader = DataLoader(
             self.train_dataset, batch_size=self.batch_size, shuffle=True
         )
+
 
     def learn_ensemble_weight(self, train: pd.DataFrame, ratio: float):
         if self.ensemble == "mean":
@@ -120,11 +111,24 @@ class EnsembleModelAdapter:
 
         self.optimizer = torch.optim.Adam([self.EnsembleModel.weight], lr=self.lr)
 
-        self._data_process(train, ratio)
+        try:
+            self._data_process(train, ratio)
+        except Exception as e:
+            import traceback as tb
+
+            tb.print_exc()
+            print(str(e))
+
+            self.ensemble = "mean"
+            return
+
         self.EnsembleModel.train()
-        self.early_stop = EarlyStopping(patience=3)
+        self.early_stop = EarlyStopping(patience=min(self.epochs // 2, 3))
 
         for epoch in range(self.epochs):
+            valid_loss = self._validate()
+            self.early_stop(valid_loss, self.EnsembleModel)
+
             for x, y in self.train_loader:
                 self.optimizer.zero_grad()
                 y_pred = self.EnsembleModel(x)
@@ -132,11 +136,12 @@ class EnsembleModelAdapter:
                 loss = self.criterion(y_pred, y)
                 loss.backward()
                 self.optimizer.step()
-            if self.val_loader is not None:
-                valid_loss = self._validate()
-                self.early_stop(valid_loss, self.EnsembleModel)
-                if self.early_stop.early_stop:
-                    break
+
+            if self.early_stop.early_stop:
+                break
+
+        self.EnsembleModel.load_state_dict(self.early_stop.check_point)
+
 
     def _validate(self):
         self.EnsembleModel.eval()
@@ -150,8 +155,10 @@ class EnsembleModelAdapter:
 
             return np.mean(total_loss)
 
+
     def forecast_fit(self, train: pd.DataFrame, ratio: float):
         self.EnsembleModel.forecast_fit(train, ratio)
+
 
     def forecast(self, pred_len: int, train: pd.DataFrame):
         return self.EnsembleModel.weighted_forecast(pred_len, train)
@@ -172,7 +179,7 @@ class EnsembleModel(nn.Module):
         self._parse()
 
     def _compile(self):
-        device = init_dl_program(0, seed=301, max_threads=None)
+        device = self.device
         train_data = self.dataset.reset_index(drop=True)
         np_data = train_data.values
 
@@ -271,11 +278,10 @@ class EnsembleModel(nn.Module):
             except:
                 continue
 
-        pred_len = self.recommend_model_hyper_params["output_chunk_length"]
         self.weight = nn.Parameter(
             torch.rand(
+                1,
                 len(self.trained_models),
-                pred_len,
             ),
             requires_grad=False,
         ).to(self.device)
@@ -285,8 +291,8 @@ class EnsembleModel(nn.Module):
     def forward(self, X: torch.Tensor):
         X = X.to(self.device)
         weighted_predict = torch.einsum(
-            "ij,nijl->njl", F.softmax(self.weight, dim=0), X
-        )
+            "ij,njkl->nikl", F.softmax(self.weight), X
+        ).squeeze(1)
         return weighted_predict
 
     def forecast(self, pred_len: int, train: pd.DataFrame):
@@ -329,9 +335,32 @@ class EnsembleModel(nn.Module):
             print(f"{repr(model)}")
             print(temp)
         predict = torch.FloatTensor(np.array(predict_list)).to(self.device)
-        weighted_predict = torch.einsum(
-            "ij,ijl->jl", F.softmax(self.weight, dim=0), predict
-        )
+        weight = F.softmax(self.weight)
+        weighted_predict = torch.einsum("ij,jkl->ikl", weight, predict).squeeze(0)
 
         predict = weighted_predict.detach().cpu().numpy()
+        return predict
+
+    def inner_forecast_back(self, horizon_len: int, pred_len: int, data: pd.DataFrame):
+        predict_list = []
+        for model in self.trained_models:
+            try:
+                temp = model.inner_forecast_back(horizon_len, pred_len, data)
+
+            except Exception as e:
+                import traceback as tb
+
+                tb.print_exc()
+                print(f"{repr(model)}:{str(e)}")
+                continue
+
+            if np.any(np.isnan(temp)):
+                continue
+            predict_list.append(temp)  # 预测未来数据
+            # print(f"{repr(model)}")
+            # print(temp)
+
+        predict = np.array(predict_list)
+
+        predict = np.transpose(predict, (1, 0, 2, 3))
         return predict

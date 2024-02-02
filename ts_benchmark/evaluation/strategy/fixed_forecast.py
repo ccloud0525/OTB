@@ -132,10 +132,10 @@ class FixedForecast(Strategy):
                     recommend_model_hyper_params=model_factory.model_hyper_params,
                     dataset=train,
                     top_k=5,
-                    ensemble="mean",
+                    ensemble="learn",
                     batch_size=4,
                     lr=0.001,
-                    epochs=30,
+                    epochs=100,
                 )
                 model.forecast_fit(train, 0.875)
                 model.learn_ensemble_weight(train, 0.875)

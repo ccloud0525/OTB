@@ -20,8 +20,8 @@ DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "c_out": 1,
     "e_layers": 2,
     "d_layers": 1,
-    "d_model": 32,
-    "d_ff": 32,
+    "d_model": 64,
+    "d_ff": 64,
     "embed": "timeF",
     "freq": "h",
     "lradj": "type1",
@@ -281,6 +281,47 @@ class TransformerAdapter_single:
                     shuffle=False,
                     drop_last=False,
                 )
+
+    def inner_forecast_back(
+        self, horizon_len: int, pred_len: int, data: pd.DataFrame
+    ) -> np.ndarray:
+        if self.model is None:
+            raise ValueError("Model not trained. Call the fit() function first.")
+
+        config = self.config
+        assert horizon_len == config.seq_len
+        assert pred_len == config.pred_len
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        data_set, data_loader = data_provider(
+            data,
+            config,
+            timeenc=1,
+            batch_size=config.batch_size,
+            shuffle=False,
+            drop_last=False,
+        )
+
+        output = []
+        for input, target, input_mark, target_mark in data_loader:
+            input, target, input_mark, target_mark = (
+                input.to(device),
+                target.to(device),
+                input_mark.to(device),
+                target_mark.to(device),
+            )
+            dec_input = torch.zeros_like(target[:, -config.pred_len :, :]).float()
+            dec_input = (
+                torch.cat([target[:, : config.label_len, :], dec_input], dim=1)
+                .float()
+                .to(device)
+            )
+            output.append(self.model(input, input_mark, dec_input, target_mark))
+
+        output = torch.concat(output, dim=0)
+        output = output.detach().cpu().numpy()
+        return output
 
 
 def generate_model_factory(
