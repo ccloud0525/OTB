@@ -68,6 +68,7 @@ class EnsembleModelAdapter:
             self.device,
             sample_len,
             top_k,
+            ensemble,
         )
         self.ensemble = ensemble
         self.criterion = nn.MSELoss()
@@ -81,11 +82,6 @@ class EnsembleModelAdapter:
         pred_len = self.recommend_model_hyper_params["output_chunk_length"]
         length = int(len(train) * (1 - ratio))
         if length < horizon_len + pred_len:
-            # if len(train) < 2 * (horizon_len + pred_len):
-            #     raise ValueError("数据集过短，无法进行训练")
-            # else:
-            #     border = len(train) - horizon_len - pred_len
-            #     train_data, val_data = split_before(train, border)
             raise ValueError("数据集过短，无法进行训练")
 
         else:
@@ -177,7 +173,13 @@ class EnsembleModelAdapter:
 
 class EnsembleModel(nn.Module):
     def __init__(
-        self, recommend_model_hyper_params, dataset, device, sample_len=24, top_k=5
+        self,
+        recommend_model_hyper_params,
+        dataset,
+        device,
+        sample_len=24,
+        top_k=5,
+        ensemble="mean",
     ):
         super().__init__()
         self.top_k = top_k
@@ -185,9 +187,12 @@ class EnsembleModel(nn.Module):
         self.sample_len = sample_len
         self.recommend_model_hyper_params = recommend_model_hyper_params
         self.trained_models = []
+        self.learn_weighted_models = []
+        self.mean_weighted_models = []
         self.device = device
         self._compile()
         self._parse()
+        self.ensemble = ensemble
 
     def _compile(self):
         device = self.device
@@ -276,12 +281,42 @@ class EnsembleModel(nn.Module):
         """
         return f"EnsembleModel_{self.top_k}"
 
+    def _init_weight(self):
+        if self.ensemble == "mean":
+            self.weight = nn.Parameter(
+                torch.rand(
+                    1,
+                    len(self.trained_models),
+                ),
+                requires_grad=False,
+            ).to(self.device)
+            self.weight.requires_grad = False
+            nn.init.constant_(self.weight, 1 / len(self.trained_models))
+            self.mean_weighted_models = self.trained_models
+        elif self.ensemble == "learn":
+            for model in self.trained_models:
+                if hasattr(model, "allow_fit_on_eval"):
+                    if not model.allow_fit_on_eval:
+                        self.learn_weighted_models.append(model)
+                    else:
+                        self.mean_weighted_models.append(model)
+                else:
+                    self.learn_weighted_models.append(model)
+
+            self.weight = nn.Parameter(
+                torch.rand(
+                    1,
+                    len(self.learn_weighted_models),
+                ),
+                requires_grad=False,
+            ).to(self.device)
+            self.weight.requires_grad = True
+            nn.init.constant_(self.weight, 1 / len(self.learn_weighted_models))
+
+        else:
+            raise ValueError("Unsupported ensemble method")
+
     def forecast_fit(self, train: pd.DataFrame, ratio: float):
-        # model_factory_lst = [self.model_factory_lst[-2], self.model_factory_lst[-1]]
-        # rf = self.model_factory_lst[-2]
-        # nhits = self.model_factory_lst[-1]
-        # self.model_factory_lst[-1] = nhits
-        # self.model_factory_lst[-2] = rf
         for model_factory in self.model_factory_lst:
             set_seed(2021)
             try:
@@ -295,15 +330,7 @@ class EnsembleModel(nn.Module):
             except:
                 continue
 
-        self.weight = nn.Parameter(
-            torch.rand(
-                1,
-                len(self.trained_models),
-            ),
-            requires_grad=False,
-        ).to(self.device)
-        self.weight.requires_grad = True
-        nn.init.constant_(self.weight, 1 / len(self.trained_models))
+        self._init_weight()
 
     def forward(self, X: torch.Tensor):
         X = X.to(self.device)
@@ -312,30 +339,9 @@ class EnsembleModel(nn.Module):
         ).squeeze(1)
         return weighted_predict
 
-    def forecast(self, pred_len: int, train: pd.DataFrame):
-        predict_list = []
-        for model in self.trained_models:
-            try:
-                temp = model.forecast(pred_len, train)
-
-            except Exception as e:
-                import traceback as tb
-
-                tb.print_exc()
-                print(f"{repr(model)}:{str(e)}")
-                continue
-
-            if np.any(np.isnan(temp)):
-                continue
-            predict_list.append(temp)  # 预测未来数据
-            # print(f"{repr(model)}")
-            # print(temp)
-
-        return np.array(predict_list)
-
     def weighted_forecast(self, pred_len: int, train: pd.DataFrame):
-        predict_list = []
-        for model in self.trained_models:
+        learn_weighted_models_predict_list = []
+        for model in self.learn_weighted_models:
             try:
                 temp = model.forecast(pred_len, train)
 
@@ -348,19 +354,64 @@ class EnsembleModel(nn.Module):
 
             if np.any(np.isnan(temp)):
                 continue
-            predict_list.append(temp)  # 预测未来数据
+            learn_weighted_models_predict_list.append(temp)  # 预测未来数据
             print(f"{repr(model)}")
             print(temp)
-        predict = torch.FloatTensor(np.array(predict_list)).to(self.device)
+
+        learn_predict = (
+            torch.FloatTensor(np.array(learn_weighted_models_predict_list)).to(
+                self.device
+            )
+            if len(learn_weighted_models_predict_list) > 0
+            else None
+        )
+
+        mean_weighted_models_predict_list = []
+        for model in self.mean_weighted_models:
+            try:
+                temp = model.forecast(pred_len, train)
+
+            except Exception as e:
+                import traceback as tb
+
+                tb.print_exc()
+                print(f"{repr(model)}:{str(e)}")
+                continue
+
+            if np.any(np.isnan(temp)):
+                continue
+            mean_weighted_models_predict_list.append(temp)  # 预测未来数据
+            print(f"{repr(model)}")
+            print(temp)
+
+        mean_predict = (
+            torch.FloatTensor(np.array(mean_weighted_models_predict_list)).to(
+                self.device
+            )
+            if len(mean_weighted_models_predict_list) > 0
+            else None
+        )
+
         weight = F.softmax(self.weight)
-        weighted_predict = torch.einsum("ij,jkl->ikl", weight, predict).squeeze(0)
+
+        weighted_predict = (
+            torch.einsum("ij,jkl->ikl", weight, learn_predict).squeeze(0)
+            * (len(self.learn_weighted_models) / len(self.trained_models))
+            if learn_predict is not None
+            else 0
+        ) + (
+            torch.sum(mean_predict, dim=0)
+            * (len(self.mean_weighted_models) / len(self.trained_models))
+            if mean_predict is not None
+            else 0
+        )
 
         predict = weighted_predict.detach().cpu().numpy()
         return predict
 
     def inner_forecast_back(self, horizon_len: int, pred_len: int, data: pd.DataFrame):
         predict_list = []
-        for model in self.trained_models:
+        for model in self.learn_weighted_models:
             try:
                 temp = model.inner_forecast_back(horizon_len, pred_len, data)
 
