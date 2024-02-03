@@ -12,8 +12,8 @@
         "models": [
         ],
         "recommend_model_hyper_params": {
-            "input_chunk_length":24,
-            "output_chunk_length": 24
+            "input_chunk_length":48,
+            "output_chunk_length": 48
         }
     },
 
@@ -21,7 +21,7 @@
         "metric_name": "all",
         "strategy_args": {
             "strategy_name": "fixed_forecast",
-            "pred_len": 24
+            "pred_len": 48
         }
     },
 

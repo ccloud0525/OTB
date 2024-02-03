@@ -326,6 +326,10 @@ class EnsembleModel(nn.Module):
                 else:
                     model.fit(train, ratio)  # 在训练数据上拟合模型
 
+                temp = model.forecast(pred_len=10, train=train)
+                if np.any(np.isnan(temp)):
+                    continue
+
                 self.trained_models.append(model)
             except:
                 continue
@@ -422,8 +426,6 @@ class EnsembleModel(nn.Module):
                 print(f"{repr(model)}:{str(e)}")
                 continue
 
-            if np.any(np.isnan(temp)):
-                continue
             predict_list.append(temp)  # 预测未来数据
             # print(f"{repr(model)}")
             # print(temp)
