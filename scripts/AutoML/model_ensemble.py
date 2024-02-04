@@ -31,6 +31,24 @@ def set_seed(seed):
     torch.backends.cudnn.deterministic = True
 
 
+class classifier:
+    def __init__(self, exp_id):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        ckpt_dir = os.path.join(current_dir, "ckpt")
+        files = os.listdir(ckpt_dir)
+        gbm_param_file_lst = [
+            file for file in files if f"gbm_{exp_id}" in file and file.endswith(".txt")
+        ]
+        self.gbm_list = [
+            lgb.Booster(model_file=os.path.join(ckpt_dir, file))
+            for file in gbm_param_file_lst
+        ]
+
+    def predict(self, feature):
+        pred_lst = [gbm.predict(feature) for gbm in self.gbm_list]
+        return np.mean(pred_lst, axis=0)
+
+
 class EnsembleDataset(Dataset):
     def __init__(self, X, Y):
         # 初始化数据集，这里我们假设数据是CSV文件，您需要根据您的数据集进行调整
@@ -53,7 +71,7 @@ class EnsembleModelAdapter:
         self,
         recommend_model_hyper_params,
         dataset,
-        sample_len=24,
+        sample_len=48,
         top_k=5,
         ensemble="learn",
         batch_size=8,
@@ -177,7 +195,7 @@ class EnsembleModel(nn.Module):
         recommend_model_hyper_params,
         dataset,
         device,
-        sample_len=24,
+        sample_len=48,
         top_k=5,
         ensemble="mean",
     ):
@@ -216,7 +234,7 @@ class EnsembleModel(nn.Module):
         sample_data = train_data[:, -self.sample_len :, ...]
         model = TS2Vec(input_dims=sample_data.shape[-1], device=device, **config)
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        model.load(os.path.join(current_dir, "ts2vec_model/training/0118/model.pkl"))
+        model.load(os.path.join(current_dir, "ts2vec_model/training/0118/model_2.pkl"))
 
         repr = model.encode(
             sample_data,
@@ -226,9 +244,10 @@ class EnsembleModel(nn.Module):
             batch_size=256,
         )
 
-        gbm = lgb.Booster(model_file=os.path.join(current_dir, f"ckpt/best_gbm_1.txt"))
+        GBM = classifier(exp_id=2)
         test_feature = np.reshape(repr, -1)
-        pred = np.reshape(gbm.predict([test_feature]), -1)
+        pred = np.reshape(GBM.predict([test_feature]), -1)
+        print(pred)
 
         def get_index(lst, k):
             np_lst = np.array(lst)

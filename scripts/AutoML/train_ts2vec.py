@@ -1,20 +1,16 @@
-import random
 
 import numpy as np
 import argparse
 import os
-import pickle
 
 import pandas as pd
-import torch
 import pickle
 from ts_benchmark.utils.random_utils import fix_random_seed
 import time
 import datetime
 
 from ts2vec import TS2Vec
-import ts2vec_model.datautils as datautils
-from ts2vec_model.utils import init_dl_program, name_with_datetime
+from ts2vec_model.utils import init_dl_program
 
 from sklearn.preprocessing import StandardScaler
 
@@ -54,7 +50,7 @@ if __name__ == "__main__":
         default=320,
         help="The representation dimension (defaults to 320)",
     )
-    parser.add_argument("--sample_num", type=int, default=24, help="samples num")
+    parser.add_argument("--sample_num", type=int, default=48, help="samples num")
 
     parser.add_argument(
         "--max-train-length",
@@ -82,11 +78,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--max-pred-len",
         type=int,
-        default=48,
+        default=24,
         help="The maximum pred-len in univariate forecasting",
     )
-    parser.add_argument("--ratio", nargs="+", type=float, default=[0.6, 0.2, 0.2])
-
+    parser.add_argument("--exp_id", type=int, default=2, help="The experiment id")
     args = parser.parse_args()
 
     fix_random_seed()
@@ -111,11 +106,16 @@ if __name__ == "__main__":
     dataset = np.concatenate(dataset_list, axis=1)
 
     print("Loading data... ", end="")
+    scaler = StandardScaler().fit(dataset)
+    data = scaler.transform(dataset)
 
-    data, train_slice, valid_slice, test_slice, scaler = datautils.process_data(
-        dataset, args.ratio
-    )
-    train_data = data[:, train_slice, :]
+    if data.ndim == 2:
+        data = np.expand_dims(data, 0)
+    elif data.ndim == 1:
+        data = np.expand_dims(data, 0)
+        data = np.expand_dims(data, -1)
+
+    data = np.transpose(data, (2, 1, 0))
 
     print("done")
 
@@ -137,15 +137,15 @@ if __name__ == "__main__":
 
     t = time.time()
 
-    model = TS2Vec(input_dims=train_data.shape[-1], device=device, **config)
-    if os.path.exists(f"{run_dir}/model.pkl"):
-        model.load(f"{run_dir}/model.pkl")
+    model = TS2Vec(input_dims=data.shape[-1], device=device, **config)
+    if os.path.exists(f"{run_dir}/model_{args.exp_id}.pkl"):
+        model.load(f"{run_dir}/model_{args.exp_id}.pkl")
     else:
         print("Training...")
         loss_log = model.fit(
-            train_data, n_epochs=args.epochs, n_iters=args.iters, verbose=True
+            data, n_epochs=args.epochs, n_iters=args.iters, verbose=True
         )
-        model.save(f"{run_dir}/model.pkl")
+        model.save(f"{run_dir}/model_{args.exp_id}.pkl")
 
         t = time.time() - t
         print(f"\nTraining time: {datetime.timedelta(seconds=t)}\n")
@@ -163,10 +163,10 @@ if __name__ == "__main__":
         data_alg.append([data, algorithm])
 
     print("Finished.")
-    with open("single_forecast_result/data.pkl", "wb") as f:
+    with open(f"single_forecast_result/data_{args.exp_id}.pkl", "wb") as f:
         pickle.dump(data_alg, f)
 
-    with open("single_forecast_result/data.pkl", "rb") as f:
+    with open(f"single_forecast_result/data_{args.exp_id}.pkl", "rb") as f:
         loaded_data = pickle.load(f)
 
     print(loaded_data)

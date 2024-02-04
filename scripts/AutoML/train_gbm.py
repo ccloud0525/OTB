@@ -13,8 +13,8 @@ DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 parser = argparse.ArgumentParser(description="Args for zero-cost AutoML")
 
-parser.add_argument("--top_k", type=int, default=10)
-parser.add_argument("--exp_id", type=int, default=1)
+parser.add_argument("--top_k", type=int, default=5)
+parser.add_argument("--exp_id", type=int, default=2)
 parser.add_argument("--mode", type=str, default="normal")
 
 args = parser.parse_args()
@@ -22,8 +22,11 @@ fix_random_seed()
 
 torch.set_num_threads(3)
 
+
+
+
 if __name__ == "__main__":
-    with open("single_forecast_result/data.pkl", "rb") as f:
+    with open(f"single_forecast_result/data_{args.exp_id}.pkl", "rb") as f:
         loaded_data = pickle.load(f)
     params = {
         "boosting_type": "gbdt",
@@ -97,7 +100,7 @@ if __name__ == "__main__":
         with open(f"ckpt/gbm_normal_{args.exp_id}.log", "a") as f:
             print(f"accuracy on valid set:{test_k(pred, args.top_k)}", file=f)
 
-        gbm.save_model(f"ckpt/best_gbm_{args.exp_id}.txt")
+        gbm.save_model(f"ckpt/gbm_{args.exp_id}.txt")
 
     elif args.mode == "k-fold":
         with open(f"ckpt/gbm_k-fold_{args.exp_id}.log", "w") as f:
@@ -138,38 +141,60 @@ if __name__ == "__main__":
             # 在验证集上进行预测
             y_pred = gbm.predict(X_valid, num_iteration=gbm.best_iteration)
 
-            pred_list = [list(x).index(max(x)) for x in y_pred]
-
             def get_index(lst, k):
                 np_lst = np.array(lst)
                 indices = np.argsort(-np_lst)
                 return indices[0:k]
 
-            def test_k(pred, k):
+            def test_k(pred, actual, k):
                 pred_list = [get_index(list(x), k) for x in pred]
 
                 cnt = 0
-                for i in range(len(y_valid)):
-                    if y_valid[i] in pred_list[i]:
+                for i in range(len(actual)):
+                    if actual[i] in pred_list[i]:
                         cnt += 1
 
-                accuracy = cnt / len(y_valid)
+                accuracy = cnt / len(actual)
                 return accuracy
 
             # 评估模型性能
-            acc = test_k(y_pred, args.top_k)
+            acc = test_k(y_pred, y_valid, args.top_k)
             with open(f"ckpt/gbm_k-fold_{args.exp_id}.log", "a") as f:
                 print(f"Fold {fold + 1}, ACC on valid set: {acc}", file=f)
 
-            if acc > best_acc:
-                best_acc = acc
-                best_model = gbm
-                best_fold = fold + 1
+            gbm.save_model(f"ckpt/gbm_{args.exp_id}_{fold + 1}.txt")
+
+            naive_seasonal_test_label = []
+            naive_seasonal_test_pred = []
+
+            for id, label in enumerate(y_valid):
+                if label == 28:
+                    naive_seasonal_test_label.append(label)
+                    naive_seasonal_test_pred.append(y_pred[id])
+
+            naive_seasonal_acc = test_k(
+                naive_seasonal_test_pred, naive_seasonal_test_label, args.top_k
+            )
+
+            nhits_test_label = []
+            nhits_test_pred = []
+
+            for id, label in enumerate(y_valid):
+                if label == 12:
+                    nhits_test_label.append(label)
+                    nhits_test_pred.append(y_pred[id])
+
+            nhits_acc = test_k(nhits_test_pred, nhits_test_label, args.top_k)
+
+            with open(f"ckpt/gbm_k-fold_{args.exp_id}.log", "a") as f:
+                print(
+                    f"Fold {fold + 1},NaiveSeasonal ACC on valid set: {naive_seasonal_acc} of {len(naive_seasonal_test_label)} datasets",
+                    file=f,
+                )
+                print(
+                    f"Fold {fold + 1},Nhits ACC on valid set: {nhits_acc} of {len(nhits_test_label)} datasets",
+                    file=f,
+                )
 
         with open(f"ckpt/gbm_k-fold_{args.exp_id}.log", "a") as f:
             print(f"Best Fold: {best_fold}, Best ACC on valid set: {best_acc}", file=f)
-
-        best_model.save_model(f"ckpt/best_gbm_{args.exp_id}.txt")
-
-    elif args.mode == "test":
-        gbm = lgb.Booster(model_file=f"ckpt/best_gbm_{args.exp_id}.txt")
