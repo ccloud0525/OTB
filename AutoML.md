@@ -2,12 +2,12 @@
 
 ### 1 Pipeline
 
-![pipeline](AutoML.assets/pipeline.png)
+![univariate_pipeline](AutoML.assets/univariate_pipeline.png)
 
 - 在生成Label的过程中，调用AutoML/single_forecast_result/data_process.py生成数据 dataset_algorithm.npy，表明每一条单变量数据集对应的最好算法（one-hot label）
 - 处理dataset，调用AutoML/train_ts2vec.py，使用TS2Vec，预训练一个可以提取时间序列元特征的Encoder，同时提取训练集所有数据集的特征，存储为data.pkl
 - 训练基于LightGBM的classifier，保存最优点的参数至ckpt
-- 封装EnsembleModel类实现集成模型的快速搭建和实例化
+- 封装EnsembleModelAdapter类实现集成模型的快速搭建和实例化
   
 
 ### 2 启用方式
@@ -31,16 +31,18 @@ if train_length <= 0:
 train, test = split_before(data, train_length)  # 分割训练和测试数据
             
 pred_len = 48
-model = EnsembleModel(
-                    recommend_model_hyper_params={"input_chunk_length":48,"output_chunk_length:48"},
-  									# 需要输入长度和输出长度作为超参，这是内部模型所需参数的一个超集
-                    dataset=data,
- 										# 传入数据集，内部会自动用预训练好的TS2vec提取数据集特征，并且使用预训练好的classifier选择模型
-                    top_k=5, 
-  									# ensemble的模型个数
+model = EnsembleModelAdapter(
+                    recommend_model_hyper_params=model_factory.model_hyper_params,
+                    dataset=train,
+                    top_k=3,
+                    ensemble="learn",
+                    batch_size=8,
+                    lr=0.001,
+                    epochs=100,
                 )
 
-model.forecast_fit(train, ratio=0.875) # ratio是指对于train，有些模型需要划分valid的比例
-predict = model.forecast(pred_len, train)
+model.forecast_fit(train, 0.875) # ratio是指对于train，有些模型需要划分valid的比例
+model.learn_ensemble_weight(train, 0.875)
+predict = model.forecast(self.pred_len, train)
 ```
 

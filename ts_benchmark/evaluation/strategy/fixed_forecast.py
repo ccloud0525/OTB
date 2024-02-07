@@ -131,7 +131,7 @@ class FixedForecast(Strategy):
                 model = EnsembleModelAdapter(
                     recommend_model_hyper_params=model_factory.model_hyper_params,
                     dataset=train,
-                    top_k=4,
+                    top_k=3,
                     ensemble="learn",
                     batch_size=8,
                     lr=0.001,
