@@ -345,12 +345,16 @@ class EnsembleModel(nn.Module):
                 else:
                     model.fit(train, ratio)  # 在训练数据上拟合模型
 
-                temp = model.forecast(pred_len=10, train=train)
+                temp = model.forecast(10, train)
                 if np.any(np.isnan(temp)):
                     continue
 
                 self.trained_models.append(model)
-            except:
+            except Exception as e:
+                import traceback as tb
+
+                tb.print_exc()
+                print(f"{repr(model)}:{str(e)}")
                 continue
 
         self._init_weight()
@@ -365,7 +369,11 @@ class EnsembleModel(nn.Module):
     def weighted_forecast(self, pred_len: int, train: pd.DataFrame):
         middle_result = {}
         learn_weighted_models_predict_list = []
-        for model in self.learn_weighted_models:
+        weight = F.softmax(self.weight)
+        mean_weight = 1 / len(self.trained_models)
+        weight_dict = {}
+
+        for id, model in enumerate(self.learn_weighted_models):
             try:
                 temp = model.forecast(pred_len, train)
 
@@ -382,6 +390,7 @@ class EnsembleModel(nn.Module):
             print(f"{repr(model)}")
             print(temp)
             middle_result[repr(model)] = temp
+            weight_dict[repr(model)] = weight[:, id]
 
         learn_predict = (
             torch.FloatTensor(np.array(learn_weighted_models_predict_list)).to(
@@ -409,6 +418,7 @@ class EnsembleModel(nn.Module):
             print(f"{repr(model)}")
             print(temp)
             middle_result[repr(model)] = temp
+            weight_dict[repr(model)] = mean_weight
 
         mean_predict = (
             torch.FloatTensor(np.array(mean_weighted_models_predict_list)).to(
@@ -417,8 +427,6 @@ class EnsembleModel(nn.Module):
             if len(mean_weighted_models_predict_list) > 0
             else None
         )
-
-        weight = F.softmax(self.weight)
 
         weighted_predict = (
             torch.einsum("ij,jkl->ikl", weight, learn_predict).squeeze(0)
@@ -433,7 +441,7 @@ class EnsembleModel(nn.Module):
         )
 
         predict = weighted_predict.detach().cpu().numpy()
-        return predict, middle_result
+        return predict, middle_result, weight_dict
 
     def inner_forecast_back(self, horizon_len: int, pred_len: int, data: pd.DataFrame):
         predict_list = []

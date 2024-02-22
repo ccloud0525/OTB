@@ -17,6 +17,7 @@ from ts_benchmark.models.get_model import ModelFactory
 from ts_benchmark.utils.data_processing import split_before
 from ts_benchmark.utils.random_utils import fix_random_seed
 from scripts.AutoML.model_ensemble import EnsembleModelAdapter
+from ts_benchmark.utils.visualization import Visualize_Ensemble_Model
 
 
 class FixedForecast(Strategy):
@@ -140,8 +141,12 @@ class FixedForecast(Strategy):
                 model.forecast_fit(train, 0.875)
                 model.learn_ensemble_weight(train, 0.875)
                 end_fit_time = time.time()
-                predict = model.forecast(self.pred_len, train)
-
+                predict, middle_results, weight_dict = model.forecast(
+                    self.pred_len, train
+                )
+                Visualize_Ensemble_Model(
+                    train, test, predict, middle_results, weight_dict,series_name
+                )
             else:
                 model = model_factory()
                 if hasattr(model, "forecast_fit"):
