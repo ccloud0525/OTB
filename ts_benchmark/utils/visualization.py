@@ -31,7 +31,7 @@ def Visualize_Ensemble_Model(
             f"{model_name}, weight: {np.around(weight_dict[model_name].item(), decimals=3)} , smape : {np.around(smape(actual=test_data, predicted=middle_result[model_name]), decimals=2)}%"
             for model_name in model_names
         ],
-        f"EnsembleModel, smape : {smape(actual=test_data, predicted=pred_data)}%",
+        f"EnsembleModel, smape : {np.around(smape(actual=test_data, predicted=pred_data), decimals=2)}%",
     ]
 
     # 绘制图表
