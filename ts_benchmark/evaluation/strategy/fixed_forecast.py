@@ -145,7 +145,7 @@ class FixedForecast(Strategy):
                     self.pred_len, train
                 )
                 Visualize_Ensemble_Model(
-                    train, test, predict, middle_results, weight_dict,series_name
+                    train, test, predict, middle_results, weight_dict, series_name
                 )
             else:
                 model = model_factory()
