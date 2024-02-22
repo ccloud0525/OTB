@@ -23,7 +23,7 @@ python run_benchmark.py --config-path "fixed_forecast_config.json" --data-set-na
 
 ```python
 # example
-from scripts.AutoML.model_ensemble import EnsembleModel
+from scripts.AutoML.model_ensemble import EnsembleModelAdapter
 data = DataPool().get_series(series_name)
 train_length = len(data) - self.pred_len
 if train_length <= 0:

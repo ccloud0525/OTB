@@ -363,6 +363,7 @@ class EnsembleModel(nn.Module):
         return weighted_predict
 
     def weighted_forecast(self, pred_len: int, train: pd.DataFrame):
+        middle_result = {}
         learn_weighted_models_predict_list = []
         for model in self.learn_weighted_models:
             try:
@@ -380,6 +381,7 @@ class EnsembleModel(nn.Module):
             learn_weighted_models_predict_list.append(temp)  # 预测未来数据
             print(f"{repr(model)}")
             print(temp)
+            middle_result[repr(model)] = temp
 
         learn_predict = (
             torch.FloatTensor(np.array(learn_weighted_models_predict_list)).to(
@@ -406,6 +408,7 @@ class EnsembleModel(nn.Module):
             mean_weighted_models_predict_list.append(temp)  # 预测未来数据
             print(f"{repr(model)}")
             print(temp)
+            middle_result[repr(model)] = temp
 
         mean_predict = (
             torch.FloatTensor(np.array(mean_weighted_models_predict_list)).to(
@@ -430,7 +433,7 @@ class EnsembleModel(nn.Module):
         )
 
         predict = weighted_predict.detach().cpu().numpy()
-        return predict
+        return predict, middle_result
 
     def inner_forecast_back(self, horizon_len: int, pred_len: int, data: pd.DataFrame):
         predict_list = []
