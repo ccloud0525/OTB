@@ -126,6 +126,11 @@ class FixedForecast(Strategy):
             # self.scaler.fit(train_data1.values)
             self.scaler.fit(train.values)
             # ----------------------------------------------------------------------------------可以删除
+            # transformed_train = pd.DataFrame(
+            #     self.scaler.transform(train.values),
+            #     columns=train.columns,
+            #     index=train.index,
+            # )
 
             start_fit_time = time.time()
             if model_factory.model_name == "ensemble":
@@ -144,6 +149,11 @@ class FixedForecast(Strategy):
                 predict, middle_results, weight_dict = model.forecast(
                     self.pred_len, train
                 )
+
+                # for key,middle_result in middle_results.items():
+                #     middle_results[key] = self.scaler.inverse_transform(middle_result)
+
+                # predict = self.scaler.inverse_transform(predict)
                 Visualize_Ensemble_Model(
                     train, test, predict, middle_results, weight_dict, series_name
                 )

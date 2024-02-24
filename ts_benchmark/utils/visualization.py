@@ -55,8 +55,10 @@ def Visualize_Ensemble_Model(
     for i, (model, result) in enumerate(middle_result.items()):
         plt.plot(test_range, result[:, 0], color=colors[i + 2], label=labels[i + 2])
 
+    data_name, _ = os.path.splitext(series_name)
+
     # 设置图表标题和轴标签
-    plt.title("Model Predictions")
+    plt.title(f"Model Predictions on {data_name}")
     plt.xlabel("date")  # 请根据实际情况替换为正确的横轴标签
     plt.ylabel("value")  # 请根据实际情况替换为正确的纵轴标签
 
@@ -64,11 +66,10 @@ def Visualize_Ensemble_Model(
     plt.legend()
     current_script_path = os.path.abspath(__file__)
     dir_path = os.path.abspath(
-        os.path.join(current_script_path, "..", "..", "..", "result", "pictures")
+        os.path.join(current_script_path, "..", "..", "..", "result", "pictures_2")
     )
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)
-    data_name, _ = os.path.splitext(series_name)
     plt.savefig(os.path.join(dir_path, f"{data_name}.png"), dpi=400)
     plt.close()
 

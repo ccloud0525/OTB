@@ -14,6 +14,16 @@ from ts_benchmark.baselines.time_series_library.utils.tools import EarlyStopping
 import torch.nn.functional as F
 import random
 
+import torch
+
+
+def smape_loss(y_pred, y_true):
+    epsilon = 0.1  # 用于避免分母为零的情况
+    denominator = torch.abs(y_true) + torch.abs(y_pred) + epsilon
+    diff = torch.abs(y_true - y_pred)
+    smape = 2.0 * torch.mean(diff / denominator)
+    return smape
+
 
 def set_seed(seed):
     """
@@ -89,7 +99,10 @@ class EnsembleModelAdapter:
             ensemble,
         )
         self.ensemble = ensemble
-        self.criterion = nn.MSELoss()
+        # self.criterion = nn.MSELoss()
+        self.criterion = nn.SmoothL1Loss()
+        # self.criterion = nn.L1Loss()
+        # self.criterion = smape_loss
         self.recommend_model_hyper_params = recommend_model_hyper_params
         self.batch_size = batch_size
         self.epochs = epochs

@@ -380,6 +380,7 @@ from typing import Dict
 import darts
 import numpy as np
 import pandas as pd
+import torch.nn
 from darts import TimeSeries
 from darts.models import (
     ARIMA,
@@ -509,7 +510,6 @@ class DartsModelAdapter:
             train_data_value = series
             self.model = self.model_class(**self.model_args)
             train_data = TimeSeries.from_dataframe(train_data_value)
-
             return self.model.fit(train_data)
 
     def forecast(self, pred_len: int, train: pd.DataFrame) -> np.ndarray:
@@ -642,7 +642,8 @@ DARTS_DEEP_MODEL_REQUIRED_ARGS3 = {
 DARTS_DEEP_MODEL_ARGS = {
     "pl_trainer_kwargs": {
         "enable_progress_bar": False,
-    }
+    },
+    "loss_fn": torch.nn.SmoothL1Loss(),
 }
 
 DARTS_MODELS = [
