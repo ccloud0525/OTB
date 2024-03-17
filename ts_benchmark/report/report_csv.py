@@ -36,6 +36,7 @@ def report(report_config: dict) -> None:
     log_data = (
         log_files if isinstance(log_files, pd.DataFrame) else _load_log_data(log_files)
     )
+    return log_data
 
     # ---------------------------------------------------------删除
     selected_column = report_config["report_metrics"]  # 替换为您想要处理的列的名称
