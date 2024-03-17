@@ -137,14 +137,14 @@ class FixedForecast(Strategy):
                 model = EnsembleModelAdapter(
                     recommend_model_hyper_params=model_factory.model_hyper_params,
                     dataset=train,
-                    top_k=3,
+                    top_k=5,
                     ensemble="learn",
                     batch_size=8,
                     lr=0.001,
                     epochs=100,
                 )
                 model.forecast_fit(train, 0.875)
-                model.learn_ensemble_weight(train, 0.875)
+                model.learn_ensemble_weight(train, 0.66)
                 end_fit_time = time.time()
                 predict, middle_results, weight_dict = model.forecast(
                     self.pred_len, train

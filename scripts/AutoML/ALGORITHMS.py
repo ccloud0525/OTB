@@ -33,23 +33,25 @@ ALGORITHMS = {
 }
 
 LIGHT_ALGORITHMS = {
-    15: "darts_blockrnnmodel",
-    16: "darts_statsforecastautoets",
-    17: "darts_autoarima",
-    18: "darts_statsforecastautotheta",
+    0: "FiLM",
+    1: "DLinear",
+    4: "NLinear",
+    8: "PatchTST",
+    12: "darts_nhitsmodel",
+    14: "Informer",
     19: "darts_randomforest",
-    20: "darts_kalmanforecaster",
+}
+
+NAIVE_ALGORITHMS={
+    16: "darts_statsforecastautoets",
+    18: "darts_statsforecastautotheta",
     21: "darts_naivemovingaverage",
-    22: "darts_rnnmodel",
-    23: "darts_tidemodel",
     24: "darts_naivemean",
     25: "darts_naivedrift",
-    26: "darts_xgbmodel",
-    27: "darts_linearregressionmodel",
     28: "darts_naiveseasonal",
-    29: "darts_lightgbmmodel",
     30: "darts_statsforecastautoces",
 }
+
 
 HEAVY_ALGORITHMS = {
     0: "FiLM",
@@ -59,12 +61,9 @@ HEAVY_ALGORITHMS = {
     4: "NLinear",
     5: "darts_nbeatsmodel",
     6: "Triformer",
-    7: "darts_tcnmodel",
     8: "PatchTST",
     9: "Crossformer",
     10: "FEDformer",
     11: "Linear",
-    12: "darts_nhitsmodel",
-    13: "Nonstationary_Transformer",
     14: "Informer",
 }

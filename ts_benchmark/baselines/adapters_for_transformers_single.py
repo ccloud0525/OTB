@@ -38,12 +38,12 @@ DEFAULT_TRANSFORMER_BASED_HYPER_PARAMS = {
     "dropout": 0.1,
     "batch_size": 8,
     "lr": 0.001,
-    "num_epochs": 5,
+    "num_epochs": 35,
     "num_workers": 0,
     "loss": "MSE",
     "itr": 1,
     "distil": True,
-    "patience": 3,
+    "patience": 5,
     "task_name": "short_term_forecast",
     "p_hidden_dims": [128, 128],
     "p_hidden_layers": 2,
@@ -123,6 +123,38 @@ class TransformerAdapter_single:
         test = pd.concat([test, new_df])
         return test
 
+    def validate(self, valid_data_loader, criterion):
+        config = self.config
+        total_loss = []
+        self.model.eval()
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+        for input, target, input_mark, target_mark in valid_data_loader:
+            input, target, input_mark, target_mark = (
+                input.to(device),
+                target.to(device),
+                input_mark.to(device),
+                target_mark.to(device),
+            )
+            # decoder input
+            dec_input = torch.zeros_like(target[:, -config.pred_len:, :]).float()
+            dec_input = (
+                torch.cat([target[:, : config.label_len, :], dec_input], dim=1)
+                .float()
+                .to(device)
+            )
+
+            output = self.model(input, input_mark, dec_input, target_mark)
+
+            target = target[:, -config.pred_len:, :]
+            output = output[:, -config.pred_len:, :]
+            loss = criterion(output, target).detach().cpu().numpy()
+            total_loss.append(loss)
+
+        total_loss = np.mean(total_loss)
+        self.model.train()
+        return total_loss
+
     def forecast_fit(self, train_data: pd.DataFrame, ratio):
         """
         训练模型。
@@ -130,6 +162,14 @@ class TransformerAdapter_single:
         :param train_data: 用于训练的时间序列数据。
         """
         self.hyper_param_tune(train_data)
+
+        if len(train_data) < 1000:
+            self.config.patience = 5
+        elif len(train_data) >= 1000 and len(train_data) < 3000:
+            self.config.patience = 4
+        else:
+            self.config.patience = 3
+
         self.model = self.model_class(self.config)
         print(
             "----------------------------------------------------------",
@@ -163,6 +203,8 @@ class TransformerAdapter_single:
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+        self.early_stopping = EarlyStopping(patience=config.patience)
+
         self.model.to(device)
         # 计算可学习参数的总数
         total_params = sum(
@@ -180,7 +222,7 @@ class TransformerAdapter_single:
             self.model.train()
             # for input, target, input_mark, target_mark in train_data_loader:
             for i, (input, target, input_mark, target_mark) in enumerate(
-                train_data_loader
+                    train_data_loader
             ):
                 optimizer.zero_grad()
                 input, target, input_mark, target_mark = (
@@ -190,7 +232,7 @@ class TransformerAdapter_single:
                     target_mark.to(device),
                 )
                 # decoder input
-                dec_input = torch.zeros_like(target[:, -config.pred_len :, :]).float()
+                dec_input = torch.zeros_like(target[:, -config.pred_len:, :]).float()
                 dec_input = (
                     torch.cat([target[:, : config.label_len, :], dec_input], dim=1)
                     .float()
@@ -199,14 +241,17 @@ class TransformerAdapter_single:
 
                 output = self.model(input, input_mark, dec_input, target_mark)
 
-                target = target[:, -config.pred_len :, :]
-                output = output[:, -config.pred_len :, :]
+                target = target[:, -config.pred_len:, :]
+                output = output[:, -config.pred_len:, :]
                 loss = criterion(output, target)
 
                 loss.backward()
                 optimizer.step()
 
-            adjust_learning_rate(optimizer, epoch + 1, config)
+            valid_loss = self.validate(train_data_loader, criterion)
+            self.early_stopping(valid_loss, self.model)
+            if self.early_stopping.early_stop:
+                break
 
     def forecast(self, pred_len: int, train: pd.DataFrame) -> np.ndarray:
         """
@@ -216,6 +261,8 @@ class TransformerAdapter_single:
         :param testdata: 用于预测的时间序列数据。
         :return: 预测结果的数组。
         """
+
+        self.model.load_state_dict(self.early_stopping.check_point)
 
         # train = pd.DataFrame(self.scaler.transform(train.values), columns=train.columns,
         #                                       index=train.index)
@@ -247,7 +294,7 @@ class TransformerAdapter_single:
                         target_mark.to(device),
                     )
                     dec_input = torch.zeros_like(
-                        target[:, -config.pred_len :, :]
+                        target[:, -config.pred_len:, :]
                     ).float()
                     dec_input = (
                         torch.cat([target[:, : config.label_len, :], dec_input], dim=1)
@@ -257,7 +304,7 @@ class TransformerAdapter_single:
                     output = self.model(input, input_mark, dec_input, target_mark)
 
                 column_num = output.shape[-1]
-                temp = output.cpu().numpy().reshape(-1, column_num)[-config.pred_len :]
+                temp = output.cpu().numpy().reshape(-1, column_num)[-config.pred_len:]
 
                 if answer is None:
                     answer = temp
@@ -268,11 +315,11 @@ class TransformerAdapter_single:
                     # answer[-pred_len:] = self.scaler.inverse_transform(answer[-pred_len:])
                     return answer[-pred_len:]
 
-                output = output.cpu().numpy()[:, -config.pred_len :, :]
+                output = output.cpu().numpy()[:, -config.pred_len:, :]
                 for i in range(config.pred_len):
                     test.iloc[i + config.seq_len] = output[0, i, :]
 
-                test = test.iloc[config.pred_len :]
+                test = test.iloc[config.pred_len:]
                 test = self.padding_data_for_forecast(test)
 
                 test_data_set, test_data_loader = data_provider(
@@ -285,14 +332,12 @@ class TransformerAdapter_single:
                 )
 
     def inner_forecast_back(
-        self, horizon_len: int, pred_len: int, data: pd.DataFrame
+            self, horizon_len: int, pred_len: int, data: pd.DataFrame
     ) -> np.ndarray:
         if self.model is None:
             raise ValueError("Model not trained. Call the fit() function first.")
 
         config = self.config
-        assert horizon_len == config.seq_len
-        assert pred_len == config.pred_len
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -313,7 +358,7 @@ class TransformerAdapter_single:
                 input_mark.to(device),
                 target_mark.to(device),
             )
-            dec_input = torch.zeros_like(target[:, -config.pred_len :, :]).float()
+            dec_input = torch.zeros_like(target[:, -config.pred_len:, :]).float()
             dec_input = (
                 torch.cat([target[:, : config.label_len, :], dec_input], dim=1)
                 .float()
@@ -327,7 +372,7 @@ class TransformerAdapter_single:
 
 
 def generate_model_factory(
-    model_name: str, model_class: type, required_args: dict
+        model_name: str, model_class: type, required_args: dict
 ) -> Dict:
     """
     生成模型工厂信息，用于创建 TransformerAdapter 模型适配器。

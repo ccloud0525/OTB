@@ -2,7 +2,7 @@ import lightgbm as lgb
 import pandas as pd
 from .ts2vec import TS2Vec
 import numpy as np
-from .ALGORITHMS import ALGORITHMS
+from .ALGORITHMS import ALGORITHMS, LIGHT_ALGORITHMS, HEAVY_ALGORITHMS,NAIVE_ALGORITHMS
 import os
 from ts_benchmark.models.get_model import get_model
 from sklearn.preprocessing import StandardScaler
@@ -13,8 +13,11 @@ from torch.utils.data import DataLoader, Dataset
 from ts_benchmark.baselines.time_series_library.utils.tools import EarlyStopping
 import torch.nn.functional as F
 import random
+from scipy.signal import argrelextrema
 
 import torch
+from scipy.fft import fft, fftfreq
+from scipy.stats import linregress
 
 
 def smape_loss(y_pred, y_true):
@@ -78,35 +81,77 @@ class EnsembleDataset(Dataset):
 
 class EnsembleModelAdapter:
     def __init__(
-        self,
-        recommend_model_hyper_params,
-        dataset,
-        sample_len=48,
-        top_k=5,
-        ensemble="learn",
-        batch_size=8,
-        lr=0.001,
-        epochs=10,
+            self,
+            recommend_model_hyper_params,
+            dataset,
+            sample_len=48,
+            top_k=5,
+            ensemble="learn",
+            batch_size=8,
+            lr=0.001,
+            epochs=10,
+            mode=None,
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.recommend_model_hyper_params = recommend_model_hyper_params
+        self._tune_hyper_params(dataset)
 
         self.EnsembleModel = EnsembleModel(
-            recommend_model_hyper_params,
+            self.recommend_model_hyper_params,
             dataset,
             self.device,
             sample_len,
             top_k,
             ensemble,
+            mode,
         )
         self.ensemble = ensemble
         # self.criterion = nn.MSELoss()
         self.criterion = nn.SmoothL1Loss()
         # self.criterion = nn.L1Loss()
         # self.criterion = smape_loss
-        self.recommend_model_hyper_params = recommend_model_hyper_params
+
         self.batch_size = batch_size
         self.epochs = epochs
         self.lr = lr
+
+    def _tune_hyper_params(self, time_series: pd.DataFrame):
+
+        fmin = 0.2
+        timeseries = time_series['col_1'].values
+
+        yf = abs(np.fft.fft(timeseries))  # 获取振幅谱
+        yfnormlize = yf / len(timeseries)  # 归一化处理
+        yfhalf = yfnormlize[: len(timeseries) // 2] * 2  # 由于对称性，只取一半区间
+
+        fwbest = yfhalf[
+            argrelextrema(yfhalf, np.greater)
+        ]  # 使用 argrelextrema 函数找到频域表示中的局部极大值点（幅度大于其相邻点的点），这些点表示了时间序列中的主要频率成分; fwbest 包含了这些极大值点对应的幅度值。
+        xwbest = argrelextrema(yfhalf, np.greater)  # 这里找到了局部极大值点的索引，表示它们在频域表示中的位置。
+
+        fwbest = fwbest[
+            fwbest >= fmin
+            ].copy()  # 对于满足幅度大于等于 fmin 的极大值点，筛选出它们，然后创建它们的副本，以确保不会改变原始数组。这个步骤是根据 fmin 参数进行的幅度筛选。
+
+        period_lst = len(timeseries) / xwbest[0][: len(fwbest)]
+        input_chunk_length = self.recommend_model_hyper_params["input_chunk_length"]
+        output_chunk_length = self.recommend_model_hyper_params["output_chunk_length"]
+
+        lborder = output_chunk_length
+        rborder = 3 * output_chunk_length
+
+        proper_period = input_chunk_length
+
+        for period in period_lst:
+            period = int(period)
+            if lborder < period and period < rborder:
+                proper_period = period
+                break
+
+
+        input_chunk_length = proper_period
+
+        self.recommend_model_hyper_params["input_chunk_length"] = input_chunk_length
 
     def _data_process(self, train: pd.DataFrame, ratio: float):
         horizon_len = self.recommend_model_hyper_params["input_chunk_length"]
@@ -123,7 +168,7 @@ class EnsembleModelAdapter:
         )
         val_y = [
             torch.FloatTensor(
-                val_data.iloc[i + horizon_len : i + horizon_len + pred_len].values
+                val_data.iloc[i + horizon_len: i + horizon_len + pred_len].values
             )
             for i in range(0, val_data.shape[0] - pred_len - horizon_len + 1)
         ]
@@ -135,7 +180,7 @@ class EnsembleModelAdapter:
         )
         train_y = [
             torch.FloatTensor(
-                train_data.iloc[i + horizon_len : i + horizon_len + pred_len].values
+                train_data.iloc[i + horizon_len: i + horizon_len + pred_len].values
             )
             for i in range(0, train_data.shape[0] - pred_len - horizon_len + 1)
         ]
@@ -146,7 +191,7 @@ class EnsembleModelAdapter:
         )
 
     def learn_ensemble_weight(self, train: pd.DataFrame, ratio: float):
-        if self.ensemble == "mean":
+        if self.ensemble == "mean" or len(self.EnsembleModel.learn_weighted_models) <= 1:
             return
         elif self.ensemble != "learn":
             raise ValueError("ensemble type error")
@@ -164,7 +209,7 @@ class EnsembleModelAdapter:
             return
 
         self.EnsembleModel.train()
-        self.early_stop = EarlyStopping(patience=min(self.epochs // 2, 3))
+        self.early_stop = EarlyStopping(patience=min(self.epochs // 2, 5))
 
         for epoch in range(self.epochs):
             valid_loss = self._validate()
@@ -199,18 +244,20 @@ class EnsembleModelAdapter:
         self.EnsembleModel.forecast_fit(train, ratio)
 
     def forecast(self, pred_len: int, train: pd.DataFrame):
-        return self.EnsembleModel.weighted_forecast(pred_len, train)
+        fcst_result, middle_result, weight_dict = self.EnsembleModel.weighted_forecast(pred_len, train)
+        return fcst_result, middle_result, weight_dict
 
 
 class EnsembleModel(nn.Module):
     def __init__(
-        self,
-        recommend_model_hyper_params,
-        dataset,
-        device,
-        sample_len=48,
-        top_k=5,
-        ensemble="mean",
+            self,
+            recommend_model_hyper_params,
+            dataset,
+            device,
+            sample_len=48,
+            top_k=5,
+            ensemble="mean",
+            mode=None,
     ):
         super().__init__()
         self.top_k = top_k
@@ -221,9 +268,11 @@ class EnsembleModel(nn.Module):
         self.learn_weighted_models = []
         self.mean_weighted_models = []
         self.device = device
+        self.mode = mode
         self._compile()
         self._parse()
         self.ensemble = ensemble
+        # slow , all
 
     def _compile(self):
         device = self.device
@@ -244,7 +293,7 @@ class EnsembleModel(nn.Module):
             max_train_length=3000,
         )
 
-        sample_data = train_data[:, -self.sample_len :, ...]
+        sample_data = train_data[:, -self.sample_len:, ...]
         model = TS2Vec(input_dims=sample_data.shape[-1], device=device, **config)
         current_dir = os.path.dirname(os.path.abspath(__file__))
         model.load(os.path.join(current_dir, "ts2vec_model/training/0118/model_2.pkl"))
@@ -260,15 +309,38 @@ class EnsembleModel(nn.Module):
         GBM = classifier(exp_id=2)
         test_feature = np.reshape(repr, -1)
         pred = np.reshape(GBM.predict([test_feature]), -1)
-        print(pred)
+
+        if self.mode == "fast":
+            algorithm_pool = LIGHT_ALGORITHMS
+        elif self.mode == "slow":
+            algorithm_pool = HEAVY_ALGORITHMS
+        elif self.mode == 'naive':
+            algorithm_pool = NAIVE_ALGORITHMS
+        else:
+            algorithm_pool = ALGORITHMS
+
+        def mask(index):
+            answer = algorithm_pool.get(index)
+            if answer is not None:
+                return True
+            else:
+                return False
 
         def get_index(lst, k):
             np_lst = np.array(lst)
             indices = np.argsort(-np_lst)
-            return indices[0:k]
+
+            return_indices = []
+            for index in indices:
+                if mask(index):
+                    return_indices.append(index)
+                if len(return_indices) == k:
+                    return return_indices
+
+            return return_indices
 
         indices = get_index(pred, self.top_k)
-        self.model_name_lst = [ALGORITHMS[index] for index in indices]
+        self.model_name_lst = [algorithm_pool[index] for index in indices]
 
     def _parse(self):
         model_config = {"models": []}
@@ -282,17 +354,17 @@ class EnsembleModel(nn.Module):
             else:
                 adapter = "transformer_adapter_single"
                 model_name = (
-                    "ts_benchmark.baselines.time_series_library."
-                    + model_name
-                    + "."
-                    + model_name
+                        "ts_benchmark.baselines.time_series_library."
+                        + model_name
+                        + "."
+                        + model_name
                 )
             adapter_lst.append(adapter)
 
             new_model_name_lst.append(model_name)
 
         for adapter, model_name, model_hyper_params in zip(
-            adapter_lst, new_model_name_lst, new_model_name_lst
+                adapter_lst, new_model_name_lst, new_model_name_lst
         ):
             model_config["models"].append(
                 {
@@ -343,7 +415,8 @@ class EnsembleModel(nn.Module):
                 requires_grad=False,
             ).to(self.device)
             self.weight.requires_grad = True
-            nn.init.constant_(self.weight, 1 / len(self.learn_weighted_models))
+            if len(self.learn_weighted_models) > 0:
+                nn.init.constant_(self.weight, 1 / len(self.learn_weighted_models))
 
         else:
             raise ValueError("Unsupported ensemble method")
@@ -403,7 +476,9 @@ class EnsembleModel(nn.Module):
             print(f"{repr(model)}")
             print(temp)
             middle_result[repr(model)] = temp
-            weight_dict[repr(model)] = weight[:, id]
+            weight_dict[repr(model)] = weight[:, id] * (
+                    1 - len(self.mean_weighted_models) / len(self.trained_models)
+            )
 
         learn_predict = (
             torch.FloatTensor(np.array(learn_weighted_models_predict_list)).to(
@@ -442,16 +517,16 @@ class EnsembleModel(nn.Module):
         )
 
         weighted_predict = (
-            torch.einsum("ij,jkl->ikl", weight, learn_predict).squeeze(0)
-            * (len(self.learn_weighted_models) / len(self.trained_models))
-            if learn_predict is not None
-            else 0
-        ) + (
-            torch.sum(mean_predict, dim=0)
-            * (len(self.mean_weighted_models) / len(self.trained_models))
-            if mean_predict is not None
-            else 0
-        )
+                               torch.einsum("ij,jkl->ikl", weight, learn_predict).squeeze(0)
+                               * (len(self.learn_weighted_models) / len(self.trained_models))
+                               if learn_predict is not None
+                               else 0
+                           ) + (
+                               torch.mean(mean_predict, dim=0)
+                               * (len(self.mean_weighted_models) / len(self.trained_models))
+                               if mean_predict is not None
+                               else 0
+                           )
 
         predict = weighted_predict.detach().cpu().numpy()
         return predict, middle_result, weight_dict
@@ -471,6 +546,7 @@ class EnsembleModel(nn.Module):
 
             predict_list.append(temp)  # 预测未来数据
             # print(f"{repr(model)}")
+            # print(temp.shape)
             # print(temp)
 
         predict = np.array(predict_list)

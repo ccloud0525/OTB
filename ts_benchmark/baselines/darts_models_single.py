@@ -523,6 +523,9 @@ class DartsModelAdapter:
         # train = pd.DataFrame(self.scaler.transform(train.values), columns=train.columns,
         #                                       index=train.index)
         if self.allow_fit_on_eval:
+            if self.model_name == 'NaiveMean':
+                train = TimeSeries.from_dataframe(train[-pred_len:])
+                self.model.fit(train)
             fsct_result = self.model.predict(pred_len)
         else:
             train = TimeSeries.from_dataframe(train)
@@ -644,6 +647,7 @@ DARTS_DEEP_MODEL_ARGS = {
         "enable_progress_bar": False,
     },
     "loss_fn": torch.nn.SmoothL1Loss(),
+    "n_epochs": 65,
 }
 
 DARTS_MODELS = [
