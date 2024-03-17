@@ -14,8 +14,10 @@ from ts_benchmark.evaluation.metrics import regression_metrics
 from ts_benchmark.evaluation.strategy.constants import FieldNames
 from ts_benchmark.evaluation.strategy.strategy import Strategy
 from ts_benchmark.models.get_model import ModelFactory
-from ts_benchmark.utils.data_processing import split_before
+from ts_benchmark.utils.data_processing import split_before, read_data
 from ts_benchmark.utils.random_utils import fix_random_seed
+from scripts.AutoML.model_ensemble import EnsembleModelAdapter
+
 
 SPLIT_DICT = {
     "ETTh1.csv": 0.75,
@@ -76,11 +78,16 @@ class RollingForecast(Strategy):
 
         model = model_factory()
 
-        data = DataPool().get_series(series_name)
-        self.data_lens = int(
-            DataPool().get_series_meta_info(series_name)["length"].item()
-        )
-        # self.data_lens = len(data)
+        try:
+            data = DataPool().get_series(series_name)
+
+            self.data_lens = int(
+                DataPool().get_series_meta_info(series_name)["length"].item()
+            )
+        except:
+            data = read_data(path=series_name)
+            self.data_lens = data.shape[0]
+
         try:
             all_test_results = []
 
@@ -100,11 +107,32 @@ class RollingForecast(Strategy):
             all_test_results1 = []
             # ----------------------------------------------------------------------------------可以删除
             start_fit_time = time.time()
-            if hasattr(model, "forecast_fit"):
-                model.forecast_fit(train_data, SPLIT_DICT.get(series_name, 0.875))  # 在训练数据上拟合模型
+            if model_factory.model_name == "ensemble":
+                model = EnsembleModelAdapter(
+                    recommend_model_hyper_params=model_factory.model_hyper_params,
+                    dataset=train_data1,
+                    top_k=5,
+                    ensemble="learn",
+                    batch_size=8,
+                    lr=0.001,
+                    epochs=100,
+                )
+                model.forecast_fit(train_data1, 0.875)
+                model.learn_ensemble_weight(train_data1, 0.66)
+                end_fit_time = time.time()
             else:
-                model.fit(train_data, SPLIT_DICT.get(series_name, 0.875))  # 在训练数据上拟合模型
-            end_fit_time = time.time()
+                model = model_factory()
+                if hasattr(model, "forecast_fit"):
+                    model.forecast_fit(train_data1, 0.875)  # 在训练数据上拟合模型
+                else:
+                    model.fit(train_data1, 0.875)  # 在训练数据上拟合模型
+                end_fit_time = time.time()
+            # if hasattr(model, "forecast_fit"):
+            #     model.forecast_fit(train_data, SPLIT_DICT.get(series_name, 0.875))  # 在训练数据上拟合模型
+            # else:
+            #     model.fit(train_data, SPLIT_DICT.get(series_name, 0.875))  # 在训练数据上拟合模型
+
+
             index_list = self._get_index(test_length, train_length)  # 获取滚动窗口的索引列表
             total_inference_time = 0
             all_rolling_actual = []

@@ -14,7 +14,7 @@ from ts_benchmark.evaluation.metrics import regression_metrics
 from ts_benchmark.evaluation.strategy.constants import FieldNames
 from ts_benchmark.evaluation.strategy.strategy import Strategy
 from ts_benchmark.models.get_model import ModelFactory
-from ts_benchmark.utils.data_processing import split_before
+from ts_benchmark.utils.data_processing import split_before, read_data
 from ts_benchmark.utils.random_utils import fix_random_seed
 from scripts.AutoML.model_ensemble import EnsembleModelAdapter
 from ts_benchmark.utils.visualization import Visualize_Ensemble_Model
@@ -115,7 +115,10 @@ class FixedForecast(Strategy):
         fix_random_seed()
 
         try:
-            data = DataPool().get_series(series_name)
+            try:
+                data = DataPool().get_series(series_name)
+            except:
+                data = read_data(path=series_name)
             train_length = len(data) - self.pred_len
             if train_length <= 0:
                 raise ValueError("The prediction step exceeds the data length")
