@@ -1,7 +1,6 @@
-from typing import List
+from typing import List, Union
 
 import pandas as pd
-
 
 # -*- coding: utf-8 -*-
 import argparse
@@ -10,9 +9,10 @@ import logging
 import os
 import sys
 import warnings
+import base64
+import pickle
 
 import torch
-
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 sys.path.insert(
@@ -26,11 +26,12 @@ from ts_benchmark.utils.parallel import ParallelBackend
 
 warnings.filterwarnings("ignore")
 
-def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_args: dict,
-                     model_hyper_params: dict) -> pd.DataFrame | List[pd.DataFrame]:
+
+def forecast_service(input_file_path: str, model, config_path: str, strategy_args: dict,
+                     model_hyper_params: dict) -> Union[pd.DataFrame, List[pd.DataFrame]]:
     """
     :param input_file_path: 输入文件路径
-    :param model: 已读入内存的模型
+    :param model: 已读入内存的模型?/模型名?
     :param config_path:
     :param strategy_args:
     :param model_hyper_params:
@@ -201,7 +202,7 @@ def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_a
             raise ValueError(f"{config_name} is none")
 
     data_loader_config = config_data["data_loader_config"]
-    data_loader_config["typical_data_name_list"] = [input_df]
+    data_loader_config["typical_data_name_list"] = [input_file_path]
 
     model_config = config_data.get("model_config", None)
     args.model_name = model
@@ -227,7 +228,7 @@ def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_a
     )
 
     for adapter, model_name, model_hyper_params in zip(
-        args.adapter, args.model_name, args.model_hyper_params
+            args.adapter, args.model_name, args.model_hyper_params
     ):
         model_config["models"].append(
             {
@@ -304,5 +305,5 @@ def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_a
 
     print(actual_data)
     print(inference_data)
-    
+
     return inference_data
