@@ -208,6 +208,7 @@ def forecast_service(input_file_path: str, model, config_path: str, strategy_arg
     args.model_name = model
     args.model_hyper_params = model_hyper_params
     args.strategy_args = strategy_args
+    args.config_path = config_path
 
     if args.model_hyper_params is not None:
         if len(args.model_name) > len(args.model_hyper_params):
