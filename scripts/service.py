@@ -45,7 +45,6 @@ def forecast_service(input_file_path: str, model, config_path: str, strategy_arg
     parser.add_argument(
         "--config-path",
         type=str,
-        required=True,
         choices=[
             "fixed_detect_score_config.json",
             "fixed_detect_label_config.json",
@@ -88,7 +87,6 @@ def forecast_service(input_file_path: str, model, config_path: str, strategy_arg
         "--model-name",
         type=str,
         nargs="+",
-        required=True,
         help="model path to evaluate",
     )
     parser.add_argument(
