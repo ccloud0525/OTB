@@ -142,7 +142,7 @@ class RollingForecast(Strategy):
                 train, other = split_before(data, index)  # 分割训练数据
                 test, rest = split_before(other, self.pred_len)  # 分割测试数据
                 start_inference_time = time.time()
-                predict = model.forecast(self.pred_len, train)  # 预测未来数据
+                predict,_,_ = model.forecast(self.pred_len, train)  # 预测未来数据
                 end_inference_time = time.time()
                 total_inference_time += end_inference_time - start_inference_time
 
@@ -199,22 +199,22 @@ class RollingForecast(Strategy):
                 all_rolling_predict_pickle
             ).decode("utf-8")
 
-            # single_series_results += [
-            #     series_name,
-            #     end_fit_time - start_fit_time,
-            #     average_inference_time,
-            #     all_rolling_actual_pickle,
-            #     all_rolling_predict_pickle,
-            #     "",
-            # ]
             single_series_results += [
                 series_name,
                 end_fit_time - start_fit_time,
                 average_inference_time,
-                np.nan,
-                np.nan,
+                all_rolling_actual_pickle,
+                all_rolling_predict_pickle,
                 "",
             ]
+            # single_series_results += [
+            #     series_name,
+            #     end_fit_time - start_fit_time,
+            #     average_inference_time,
+            #     np.nan,
+            #     np.nan,
+            #     "",
+            # ]
         except Exception as e:
             log = f"{traceback.format_exc()}\n{e}"
             single_series_results = self.get_default_result(

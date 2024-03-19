@@ -145,6 +145,7 @@ class FixedForecast(Strategy):
                     batch_size=8,
                     lr=0.001,
                     epochs=100,
+                    mode="fast"
                 )
                 model.forecast_fit(train, 0.875)
                 model.learn_ensemble_weight(train, 0.66)
