@@ -2,7 +2,6 @@ from typing import List
 
 import pandas as pd
 
-
 # -*- coding: utf-8 -*-
 import argparse
 import json
@@ -26,11 +25,12 @@ from ts_benchmark.utils.parallel import ParallelBackend
 
 warnings.filterwarnings("ignore")
 
-def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_args: str,
-                     model_hyper_params: list,adapter:list):
+
+def forecast_service(input_file_path: str, model: str, config_path: str, strategy_args: dict,
+                     model_hyper_params: dict, adapter: list):
     """
     :param input_file_path: 输入文件路径
-    :param model: 已读入内存的模型
+    :param model: 模型名
     :param config_path:
     :param strategy_args:
     :param model_hyper_params:
@@ -204,10 +204,9 @@ def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_a
             raise ValueError(f"{config_name} is none")
 
     data_loader_config = config_data["data_loader_config"]
-    data_loader_config["typical_data_name_list"] = [input_df]
+    data_loader_config["typical_data_name_list"] = [input_file_path]
 
     model_config = config_data.get("model_config", None)
-
 
     if args.model_hyper_params is not None:
         if len(args.model_name) > len(args.model_hyper_params):
@@ -228,7 +227,7 @@ def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_a
     )
 
     for adapter, model_name, model_hyper_params in zip(
-        args.adapter, args.model_name, args.model_hyper_params
+            args.adapter, args.model_name, args.model_hyper_params
     ):
         model_config["models"].append(
             {
@@ -305,5 +304,5 @@ def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_a
 
     print(actual_data)
     print(inference_data)
-    
+
     return inference_data
