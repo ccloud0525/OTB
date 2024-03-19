@@ -90,6 +90,7 @@ class ModelFactory:
         model_name: str,
         model_factory: Type,
         model_hyper_params: dict,
+        *args
     ):
         """
         初始化 ModelFactory 对象。
@@ -108,6 +109,7 @@ class ModelFactory:
 
         :return: 实例化的模型对象。
         """
+
 
         return self.model_factory(**self.model_hyper_params)
 

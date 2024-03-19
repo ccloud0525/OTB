@@ -25,8 +25,8 @@ logger = logging.getLogger(__name__)
 # currently we do not support showing or processing artifact columns
 # these columns are dropped as soon as data is loaded in order to save memory
 ARTIFACT_COLUMNS = [
-    FieldNames.ACTUAL_DATA,
-    FieldNames.INFERENCE_DATA,
+    # FieldNames.ACTUAL_DATA,
+    # FieldNames.INFERENCE_DATA,
     FieldNames.LOG_INFO,
 ]
 
