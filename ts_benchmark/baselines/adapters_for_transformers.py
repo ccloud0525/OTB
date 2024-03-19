@@ -216,11 +216,11 @@ class TransformerAdapter:
 
         print(f"Total trainable parameters: {total_params}")
 
-
-        saved_str = f"{dataset_info}; {self.model_name} {str(vars(self.config))} Total trainable parameters: {total_params}\n"
-        save_log_path = os.path.join(ROOT_PATH, "result/middle_result.txt")
-        with open(save_log_path, 'a') as file:
-            file.write(saved_str)
+        #
+        # saved_str = f"{dataset_info}; {self.model_name} {str(vars(self.config))} Total trainable parameters: {total_params}\n"
+        # save_log_path = os.path.join(ROOT_PATH, "result/middle_result.txt")
+        # with open(save_log_path, 'a') as file:
+        #     file.write(saved_str)
 
 
 
