@@ -27,7 +27,7 @@ warnings.filterwarnings("ignore")
 
 
 def forecast_service(
-    input_df: str,
+    input_file_path: str,
     model: str,
     config_path: str,
     strategy_args: dict,
@@ -36,7 +36,7 @@ def forecast_service(
 ):
     """
     :param input_file_path: 输入文件路径
-    :param model: 已读入内存的模型
+    :param model: 模型名称
     :param config_path:
     :param strategy_args:
     :param model_hyper_params:
@@ -212,7 +212,7 @@ def forecast_service(
             raise ValueError(f"{config_name} is none")
 
     data_loader_config = config_data["data_loader_config"]
-    data_loader_config["typical_data_name_list"] = [input_df]
+    data_loader_config["typical_data_name_list"] = [input_file_path]
 
     model_config = config_data.get("model_config", None)
 
