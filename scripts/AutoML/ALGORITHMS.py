@@ -40,6 +40,7 @@ LIGHT_ALGORITHMS = {
     12: "darts_nhitsmodel",
     14: "Informer",
     19: "darts_randomforest",
+    26: "darts_xgbmodel",
 }
 
 NAIVE_ALGORITHMS={

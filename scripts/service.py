@@ -2,7 +2,6 @@ from typing import List
 
 import pandas as pd
 
-
 # -*- coding: utf-8 -*-
 import argparse
 import json
@@ -26,8 +25,15 @@ from ts_benchmark.utils.parallel import ParallelBackend
 
 warnings.filterwarnings("ignore")
 
-def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_args: str,
-                     model_hyper_params: list,adapter:list):
+
+def forecast_service(
+    input_df: str,
+    model: str,
+    config_path: str,
+    strategy_args: dict,
+    model_hyper_params: dict,
+    adapter: str,
+):
     """
     :param input_file_path: 输入文件路径
     :param model: 已读入内存的模型
@@ -36,6 +42,7 @@ def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_a
     :param model_hyper_params:
     :return: 单元预测返回单个dataframe，多元预测返回dataframe列表
     """
+    model_hyper_params = [json.dumps(model_hyper_params)]
     parser = argparse.ArgumentParser(
         description="run_benchmark",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -184,11 +191,12 @@ def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_a
     )
 
     torch.set_num_threads(3)
+
     args.config_path = config_path
-    args.model_name = model
+    args.model_name = [model]
     args.model_hyper_params = model_hyper_params
-    args.strategy_args = strategy_args
-    args.adapter = adapter
+    args.strategy_args = json.dumps(strategy_args)
+    args.adapter = [adapter]
     with open(os.path.join(CONFIG_PATH, args.config_path), "r") as file:
         config_data = json.load(file)
 
@@ -207,7 +215,6 @@ def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_a
     data_loader_config["typical_data_name_list"] = [input_df]
 
     model_config = config_data.get("model_config", None)
-
 
     if args.model_hyper_params is not None:
         if len(args.model_name) > len(args.model_hyper_params):
@@ -293,8 +300,8 @@ def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_a
         report_config["leaderboard_file_name"] = leaderboard_file_name
         result_df = report_csv.report(report_config)
     print(result_df)
-    actual_data = result_df['actual_data'].values[0]
-    inference_data = result_df['inference_data'].values[0]
+    actual_data = result_df["actual_data"].values[0]
+    inference_data = result_df["inference_data"].values[0]
 
     # 解码 base64 编码的字符串为字节数据
     actual_data = base64.b64decode(actual_data)
@@ -305,5 +312,5 @@ def forecast_service(input_df: pd.DataFrame, model, config_path: str, strategy_a
 
     print(actual_data)
     print(inference_data)
-    
+
     return inference_data
