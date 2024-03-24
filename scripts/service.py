@@ -26,7 +26,7 @@ from ts_benchmark.utils.parallel import ParallelBackend
 warnings.filterwarnings("ignore")
 
 
-def forecast_service(
+async def forecast_service(
     input_file_path: str,
     model: str,
     config_path: str,
