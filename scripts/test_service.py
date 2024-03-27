@@ -49,5 +49,6 @@ class Test(IsolatedAsyncioTestCase):
         adapter = "transformer_adapter_single"
     
         res = await forecast_service(input_file_path, model_name, config_path, strategy_args, model_hyper_params,adapter)
+        res = await forecast_service(input_file_path, model_name, config_path, strategy_args, model_hyper_params,adapter)
         print(res)
         self.assertIsNotNone(res)
