@@ -59,4 +59,5 @@ class Test(IsolatedAsyncioTestCase):
         return res
     def test(self):
         asyncio.run(self.test_forecast_service_auto())
+        asyncio.run(self.test_forecast_service())
 

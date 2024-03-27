@@ -39,8 +39,8 @@ LIGHT_ALGORITHMS = {
     8: "PatchTST",
     12: "darts_nhitsmodel",
     14: "Informer",
-    19: "darts_randomforest",
-    26: "darts_xgbmodel",
+    # 19: "darts_randomforest",
+    # 26: "darts_xgbmodel",
 }
 
 NAIVE_ALGORITHMS={
