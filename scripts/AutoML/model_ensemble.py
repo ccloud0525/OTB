@@ -2,7 +2,7 @@ import lightgbm as lgb
 import pandas as pd
 from .ts2vec import TS2Vec
 import numpy as np
-from .ALGORITHMS import ALGORITHMS, LIGHT_ALGORITHMS, HEAVY_ALGORITHMS,NAIVE_ALGORITHMS
+from .ALGORITHMS import ALGORITHMS, LIGHT_ALGORITHMS, HEAVY_ALGORITHMS, NAIVE_ALGORITHMS
 import os
 from ts_benchmark.models.get_model import get_model
 from sklearn.preprocessing import StandardScaler
@@ -81,16 +81,16 @@ class EnsembleDataset(Dataset):
 
 class EnsembleModelAdapter:
     def __init__(
-            self,
-            recommend_model_hyper_params,
-            dataset,
-            sample_len=48,
-            top_k=5,
-            ensemble="learn",
-            batch_size=8,
-            lr=0.001,
-            epochs=10,
-            mode=None,
+        self,
+        recommend_model_hyper_params,
+        dataset,
+        sample_len=48,
+        top_k=5,
+        ensemble="learn",
+        batch_size=8,
+        lr=0.001,
+        epochs=10,
+        mode=None,
     ):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.recommend_model_hyper_params = recommend_model_hyper_params
@@ -116,9 +116,8 @@ class EnsembleModelAdapter:
         self.lr = lr
 
     def _tune_hyper_params(self, time_series: pd.DataFrame):
-
         fmin = 0.2
-        timeseries = time_series['col_1'].values
+        timeseries = time_series["col_1"].values
 
         yf = abs(np.fft.fft(timeseries))  # 获取振幅谱
         yfnormlize = yf / len(timeseries)  # 归一化处理
@@ -131,7 +130,7 @@ class EnsembleModelAdapter:
 
         fwbest = fwbest[
             fwbest >= fmin
-            ].copy()  # 对于满足幅度大于等于 fmin 的极大值点，筛选出它们，然后创建它们的副本，以确保不会改变原始数组。这个步骤是根据 fmin 参数进行的幅度筛选。
+        ].copy()  # 对于满足幅度大于等于 fmin 的极大值点，筛选出它们，然后创建它们的副本，以确保不会改变原始数组。这个步骤是根据 fmin 参数进行的幅度筛选。
 
         period_lst = len(timeseries) / xwbest[0][: len(fwbest)]
         input_chunk_length = self.recommend_model_hyper_params["input_chunk_length"]
@@ -147,7 +146,6 @@ class EnsembleModelAdapter:
             if lborder < period and period < rborder:
                 proper_period = period
                 break
-
 
         input_chunk_length = proper_period
 
@@ -168,7 +166,7 @@ class EnsembleModelAdapter:
         )
         val_y = [
             torch.FloatTensor(
-                val_data.iloc[i + horizon_len: i + horizon_len + pred_len].values
+                val_data.iloc[i + horizon_len : i + horizon_len + pred_len].values
             )
             for i in range(0, val_data.shape[0] - pred_len - horizon_len + 1)
         ]
@@ -180,7 +178,7 @@ class EnsembleModelAdapter:
         )
         train_y = [
             torch.FloatTensor(
-                train_data.iloc[i + horizon_len: i + horizon_len + pred_len].values
+                train_data.iloc[i + horizon_len : i + horizon_len + pred_len].values
             )
             for i in range(0, train_data.shape[0] - pred_len - horizon_len + 1)
         ]
@@ -191,7 +189,10 @@ class EnsembleModelAdapter:
         )
 
     def learn_ensemble_weight(self, train: pd.DataFrame, ratio: float):
-        if self.ensemble == "mean" or len(self.EnsembleModel.learn_weighted_models) <= 1:
+        if (
+            self.ensemble == "mean"
+            or len(self.EnsembleModel.learn_weighted_models) <= 1
+        ):
             return
         elif self.ensemble != "learn":
             raise ValueError("ensemble type error")
@@ -244,20 +245,22 @@ class EnsembleModelAdapter:
         self.EnsembleModel.forecast_fit(train, ratio)
 
     def forecast(self, pred_len: int, train: pd.DataFrame):
-        fcst_result, middle_result, weight_dict = self.EnsembleModel.weighted_forecast(pred_len, train)
+        fcst_result, middle_result, weight_dict = self.EnsembleModel.weighted_forecast(
+            pred_len, train
+        )
         return fcst_result, middle_result, weight_dict
 
 
 class EnsembleModel(nn.Module):
     def __init__(
-            self,
-            recommend_model_hyper_params,
-            dataset,
-            device,
-            sample_len=48,
-            top_k=5,
-            ensemble="mean",
-            mode=None,
+        self,
+        recommend_model_hyper_params,
+        dataset,
+        device,
+        sample_len=48,
+        top_k=5,
+        ensemble="mean",
+        mode=None,
     ):
         super().__init__()
         self.top_k = top_k
@@ -282,7 +285,6 @@ class EnsembleModel(nn.Module):
         scaler = StandardScaler().fit(np_data)
         train_data = scaler.transform(np_data)
         train_data = np.transpose(train_data, (1, 0))
-
         if train_data.ndim != 3:
             train_data = np.expand_dims(train_data, axis=-1)
 
@@ -292,8 +294,18 @@ class EnsembleModel(nn.Module):
             output_dims=320,
             max_train_length=3000,
         )
-
-        sample_data = train_data[:, -self.sample_len:, ...]
+        train_length = train_data.shape[1]
+        if train_length < self.sample_len:
+            train_data = np.concatenate(
+                [
+                    train_data[:, :, ...],
+                    np.repeat(
+                        train_data[:, -1:, ...], self.sample_len - train_length, axis=1
+                    ),
+                ],
+                axis=1,
+            )
+        sample_data = train_data[:, -self.sample_len :, ...]
         model = TS2Vec(input_dims=sample_data.shape[-1], device=device, **config)
         current_dir = os.path.dirname(os.path.abspath(__file__))
         model.load(os.path.join(current_dir, "ts2vec_model/training/0118/model_2.pkl"))
@@ -314,7 +326,7 @@ class EnsembleModel(nn.Module):
             algorithm_pool = LIGHT_ALGORITHMS
         elif self.mode == "slow":
             algorithm_pool = HEAVY_ALGORITHMS
-        elif self.mode == 'naive':
+        elif self.mode == "naive":
             algorithm_pool = NAIVE_ALGORITHMS
         else:
             algorithm_pool = ALGORITHMS
@@ -354,17 +366,17 @@ class EnsembleModel(nn.Module):
             else:
                 adapter = "transformer_adapter_single"
                 model_name = (
-                        "ts_benchmark.baselines.time_series_library."
-                        + model_name
-                        + "."
-                        + model_name
+                    "ts_benchmark.baselines.time_series_library."
+                    + model_name
+                    + "."
+                    + model_name
                 )
             adapter_lst.append(adapter)
 
             new_model_name_lst.append(model_name)
 
         for adapter, model_name, model_hyper_params in zip(
-                adapter_lst, new_model_name_lst, new_model_name_lst
+            adapter_lst, new_model_name_lst, new_model_name_lst
         ):
             model_config["models"].append(
                 {
@@ -477,7 +489,7 @@ class EnsembleModel(nn.Module):
             print(temp)
             middle_result[repr(model)] = temp
             weight_dict[repr(model)] = weight[:, id] * (
-                    1 - len(self.mean_weighted_models) / len(self.trained_models)
+                1 - len(self.mean_weighted_models) / len(self.trained_models)
             )
 
         learn_predict = (
@@ -517,16 +529,16 @@ class EnsembleModel(nn.Module):
         )
 
         weighted_predict = (
-                               torch.einsum("ij,jkl->ikl", weight, learn_predict).squeeze(0)
-                               * (len(self.learn_weighted_models) / len(self.trained_models))
-                               if learn_predict is not None
-                               else 0
-                           ) + (
-                               torch.mean(mean_predict, dim=0)
-                               * (len(self.mean_weighted_models) / len(self.trained_models))
-                               if mean_predict is not None
-                               else 0
-                           )
+            torch.einsum("ij,jkl->ikl", weight, learn_predict).squeeze(0)
+            * (len(self.learn_weighted_models) / len(self.trained_models))
+            if learn_predict is not None
+            else 0
+        ) + (
+            torch.mean(mean_predict, dim=0)
+            * (len(self.mean_weighted_models) / len(self.trained_models))
+            if mean_predict is not None
+            else 0
+        )
 
         predict = weighted_predict.detach().cpu().numpy()
         return predict, middle_result, weight_dict

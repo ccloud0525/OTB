@@ -5,6 +5,11 @@
 *
 * @description: 
 '''
+import asyncio
+import pandas as pd
+
+
+# 运行异步任务
 import json
 from unittest import TestCase, IsolatedAsyncioTestCase
 from scripts.service import forecast_service
@@ -13,7 +18,7 @@ import pandas as pd
 
 class Test(IsolatedAsyncioTestCase):
     async def test_forecast_service(self):
-        input_file_path = "m4_daily_dataset_2486.csv"
+        input_file_path = "m4_hourly_dataset_385.csv"
         model_name = "time_series_library.Triformer.Triformer"
         config_path = "fixed_forecast_config_yearly.json"
         strategy_args = {
@@ -32,7 +37,7 @@ class Test(IsolatedAsyncioTestCase):
         self.assertIsNotNone(res)
 
     async def test_forecast_service_auto(self):
-        input_file_path = "m4_daily_dataset_2486.csv"
+        input_file_path = "m4_hourly_dataset_385.csv"
         model_name = "ensemble"
         config_path = "fixed_forecast_config_yearly.json"
         strategy_args = {
@@ -49,6 +54,9 @@ class Test(IsolatedAsyncioTestCase):
         adapter = "transformer_adapter_single"
     
         res = await forecast_service(input_file_path, model_name, config_path, strategy_args, model_hyper_params,adapter)
-        res = await forecast_service(input_file_path, model_name, config_path, strategy_args, model_hyper_params,adapter)
         print(res)
         self.assertIsNotNone(res)
+        return res
+    def test(self):
+        asyncio.run(self.test_forecast_service_auto())
+

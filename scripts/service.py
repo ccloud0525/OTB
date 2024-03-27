@@ -12,6 +12,7 @@ import warnings
 import base64
 import torch
 import pickle
+import asyncio
 
 sys.path.insert(0, os.path.abspath(os.path.dirname(os.path.dirname(__file__))))
 sys.path.insert(
@@ -313,4 +314,7 @@ async def forecast_service(
     print(actual_data)
     print(inference_data)
 
-    return inference_data
+    future = asyncio.Future()
+    future.set_result(inference_data)
+
+    return future
