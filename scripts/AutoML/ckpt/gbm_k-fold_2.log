@@ -1,0 +1,22 @@
+start k-fold training...
+pred_accuracy on train set:0.9903635567236093
+Fold 1, ACC on valid set: 0.5551663747810858
+Fold 1,NaiveSeasonal ACC on valid set: 0.32608695652173914 of 46 datasets
+Fold 1,Nhits ACC on valid set: 0.8505747126436781 of 87 datasets
+pred_accuracy on train set:0.9929916776171704
+Fold 2, ACC on valid set: 0.5647985989492119
+Fold 2,NaiveSeasonal ACC on valid set: 0.5106382978723404 of 47 datasets
+Fold 2,Nhits ACC on valid set: 0.75 of 76 datasets
+pred_accuracy on train set:0.9914586070959264
+Fold 3, ACC on valid set: 0.5280210157618214
+Fold 3,NaiveSeasonal ACC on valid set: 0.37777777777777777 of 45 datasets
+Fold 3,Nhits ACC on valid set: 0.75 of 92 datasets
+pred_accuracy on train set:0.9918984015765273
+Fold 4, ACC on valid set: 0.5135845749342682
+Fold 4,NaiveSeasonal ACC on valid set: 0.4358974358974359 of 39 datasets
+Fold 4,Nhits ACC on valid set: 0.7261904761904762 of 84 datasets
+pred_accuracy on train set:0.9921173636960806
+Fold 5, ACC on valid set: 0.5390008764241893
+Fold 5,NaiveSeasonal ACC on valid set: 0.34210526315789475 of 38 datasets
+Fold 5,Nhits ACC on valid set: 0.66 of 100 datasets
+Best Fold: 0, Best ACC on valid set: 0

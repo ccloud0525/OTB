@@ -1,0 +1,12 @@
+start k-fold training...
+pred_accuracy on train set:0.9870784056066579
+Fold 1, ACC on valid set: 0.7302977232924693
+pred_accuracy on train set:0.9894875164257556
+Fold 2, ACC on valid set: 0.7373029772329247
+pred_accuracy on train set:0.9872974156811213
+Fold 3, ACC on valid set: 0.7189141856392294
+pred_accuracy on train set:0.9873001970659075
+Fold 4, ACC on valid set: 0.7230499561787905
+pred_accuracy on train set:0.9881760455441209
+Fold 5, ACC on valid set: 0.7204206836108676
+Best Fold: 2, Best ACC on valid set: 0.7373029772329247
