@@ -8,6 +8,6 @@ result/
 *.DS_Store
 venv/
 scripts/for_test
-scripts/AutoML/ckpt
+scripts/AutoML
 scripts/AutoML/single_forecast_result
 AutoML.assets/
