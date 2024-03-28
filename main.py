@@ -102,7 +102,16 @@ async def on_message(message: AbstractIncomingMessage):
         task_request: schemas.TrainStartRequest = schemas.TrainStartRequest(**task_request)
 
         # execute task with dependency injection function
-        result: Union[pd.DataFrame, List] = await execute_task(task_request)
+        try:
+            result: Union[pd.DataFrame, List] = await execute_task(task_request)
+        except Exception as e:
+            print(f'error while executing task id: {task_request.task_id}')
+            with get_db_no_depends() as db:
+                complete_temp_task(task_id=task_request.task_id, end_time=datetime.now(),
+                                   status='failed',db=db)
+            print(f'db updated for task_id: {task_request.task_id}')
+            return
+            
         res_bytes = pickle.dumps(result)
         object_name = f'task_id_{task_request.task_id}.pkl'
         upload_bytes_file_to_minio(res_bytes, temp_task_output_bucket_name, object_name)
