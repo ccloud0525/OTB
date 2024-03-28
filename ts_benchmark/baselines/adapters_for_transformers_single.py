@@ -97,12 +97,11 @@ class TransformerAdapter_single:
         self.config.dec_in = column_num
         self.config.c_out = column_num
 
-        # if self.model_name == "MICN":
-        #     setattr(self.config, "label_len", self.config.seq_len)
-        # else:
-        #     setattr(self.config, "label_len", self.config.seq_len // 2)
+        if self.model_name == "MICN":
+            setattr(self.config, "label_len", self.config.seq_len)
+        else:
+            setattr(self.config, "label_len", self.config.seq_len // 2)
 
-        setattr(self.config, "label_len", self.config.pred_len)
 
     def padding_data_for_forecast(self, test):
         time_column_data = test.index

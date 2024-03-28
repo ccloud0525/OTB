@@ -19,18 +19,24 @@ import pandas as pd
 class Test(IsolatedAsyncioTestCase):
     async def test_forecast_service(self):
         input_file_path = "m4_hourly_dataset_385.csv"
-        model_name = "time_series_library.Triformer.Triformer"
+        model_name = "darts_models_single.darts_nbeatsmodel"
         config_path = "fixed_forecast_config_yearly.json"
         strategy_args = {
             "pred_len": 24
         }
-        model_hyper_params = {
-            "d_model": 32,
-            "d_ff": 64,
-            # "seq_len": 96,
-            # "pred_len": 96
-        }
-        adapter = "transformer_adapter_single"
+        if 'darts' in model_name:
+            model_hyper_params = {
+
+            }
+            adapter = None
+        else:
+            model_hyper_params = {
+                "d_model": 32,
+                "d_ff": 64,
+                # "seq_len": 96,
+                # "pred_len": 96
+            }
+            adapter = "transformer_adapter_single"
 
         res = await forecast_service(input_file_path, model_name, config_path, strategy_args, model_hyper_params,adapter)
         print(res)
@@ -49,15 +55,14 @@ class Test(IsolatedAsyncioTestCase):
             # "seq_len": 96,
             # "pred_len": 96
         }
-    
-    
+
+
         adapter = "transformer_adapter_single"
-    
+
         res = await forecast_service(input_file_path, model_name, config_path, strategy_args, model_hyper_params,adapter)
         print(res)
         self.assertIsNotNone(res)
         return res
     def test(self):
         asyncio.run(self.test_forecast_service_auto())
-        asyncio.run(self.test_forecast_service())
 
