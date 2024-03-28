@@ -18,7 +18,7 @@ import pandas as pd
 
 class Test(IsolatedAsyncioTestCase):
     async def test_forecast_service(self):
-        input_file_path = "m4_hourly_dataset_385.csv"
+        input_file_path = "m4_daily_dataset_2549.csv"
         model_name = "darts_models_single.darts_nbeatsmodel"
         config_path = "fixed_forecast_config_yearly.json"
         strategy_args = {

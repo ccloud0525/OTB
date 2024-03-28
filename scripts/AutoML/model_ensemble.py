@@ -18,6 +18,8 @@ from scipy.signal import argrelextrema
 import torch
 from scipy.fft import fft, fftfreq
 from scipy.stats import linregress
+import concurrent.futures
+import threading
 
 
 def smape_loss(y_pred, y_true):
@@ -434,26 +436,61 @@ class EnsembleModel(nn.Module):
             raise ValueError("Unsupported ensemble method")
 
     def forecast_fit(self, train: pd.DataFrame, ratio: float):
-        for model_factory in self.model_factory_lst:
+        def train_model(model_factory):
             set_seed(2021)
-            try:
-                model = model_factory()
-                if hasattr(model, "forecast_fit"):
-                    model.forecast_fit(train, ratio)  # 在训练数据上拟合模型
-                else:
-                    model.fit(train, ratio)  # 在训练数据上拟合模型
 
-                temp = model.forecast(10, train)
-                if np.any(np.isnan(temp)):
-                    continue
+            model = model_factory()
+            if hasattr(model, "forecast_fit"):
+                model.forecast_fit(train, ratio)  # 在训练数据上拟合模型
+            else:
+                model.fit(train, ratio)  # 在训练数据上拟合模型
 
-                self.trained_models.append(model)
-            except Exception as e:
-                import traceback as tb
+            temp = model.forecast(10, train)
+            if np.any(np.isnan(temp)):
+                raise ValueError("模型参数中出现nan值！")
 
-                tb.print_exc()
-                print(f"{repr(model)}:{str(e)}")
-                continue
+            return model
+
+        lock = threading.Lock()
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # 提交任务并获取 Future 对象列表
+            futures = [
+                executor.submit(train_model, model_factory)
+                for model_factory in self.model_factory_lst
+            ]
+            # 获取结果
+            for i, future in enumerate(concurrent.futures.as_completed(futures)):
+                try:
+                    model = future.result()
+                except Exception as e:
+                    import traceback as tb
+
+                    tb.print_exc()
+                    print(f"{repr(model)}:{str(e)}")
+                    continue  # 如果出现异常，跳过当前任务
+                with lock:
+                    self.trained_models.append(model)
+        # 串行
+        # for model_factory in self.model_factory_lst:
+        #     set_seed(2021)
+        #     try:
+        #         model = model_factory()
+        #         if hasattr(model, "forecast_fit"):
+        #             model.forecast_fit(train, ratio)  # 在训练数据上拟合模型
+        #         else:
+        #             model.fit(train, ratio)  # 在训练数据上拟合模型
+        #
+        #         temp = model.forecast(10, train)
+        #         if np.any(np.isnan(temp)):
+        #             continue
+        #
+        #         self.trained_models.append(model)
+        #     except Exception as e:
+        #         import traceback as tb
+        #
+        #         tb.print_exc()
+        #         print(f"{repr(model)}:{str(e)}")
+        #         continue
 
         self._init_weight()
 
@@ -545,21 +582,44 @@ class EnsembleModel(nn.Module):
 
     def inner_forecast_back(self, horizon_len: int, pred_len: int, data: pd.DataFrame):
         predict_list = []
-        for model in self.learn_weighted_models:
-            try:
-                temp = model.inner_forecast_back(horizon_len, pred_len, data)
 
-            except Exception as e:
-                import traceback as tb
+        def forecast_back(model):
+            temp = model.inner_forecast_back(horizon_len, pred_len, data)
+            return temp
 
-                tb.print_exc()
-                print(f"{repr(model)}:{str(e)}")
-                continue
+        lock = threading.Lock()
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            # 提交任务并获取 Future 对象列表
+            futures = [
+                executor.submit(forecast_back, model)
+                for model in self.learn_weighted_models
+            ]
+            # 获取结果
+            for i, future in enumerate(concurrent.futures.as_completed(futures)):
+                try:
+                    temp = future.result()
+                except Exception as e:
+                    print(f"error: {str(e)}")
+                    continue  # 如果出现异常，跳过当前任务
+                with lock:
+                    predict_list.append(temp)
 
-            predict_list.append(temp)  # 预测未来数据
-            # print(f"{repr(model)}")
-            # print(temp.shape)
-            # print(temp)
+        # 串行
+        # for model in self.learn_weighted_models:
+        #     try:
+        #         temp = model.inner_forecast_back(horizon_len, pred_len, data)
+        #
+        #     except Exception as e:
+        #         import traceback as tb
+        #
+        #         tb.print_exc()
+        #         print(f"{repr(model)}:{str(e)}")
+        #         continue
+        #
+        #     predict_list.append(temp)  # 预测未来数据
+        # print(f"{repr(model)}")
+        # print(temp.shape)
+        # print(temp)
 
         predict = np.array(predict_list)
 

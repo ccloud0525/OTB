@@ -81,7 +81,7 @@ def Visualize_Ensemble_Model(
     plt.legend()
     current_script_path = os.path.abspath(__file__)
     dir_path = os.path.abspath(
-        os.path.join(current_script_path, "..", "..", "..", "result", "pictures")
+        os.path.join(current_script_path, "..", "..", "..", "result", "pictures_test")
     )
     if not os.path.exists(dir_path):
         os.makedirs(dir_path)

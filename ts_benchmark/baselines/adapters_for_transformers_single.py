@@ -102,7 +102,6 @@ class TransformerAdapter_single:
         else:
             setattr(self.config, "label_len", self.config.seq_len // 2)
 
-
     def padding_data_for_forecast(self, test):
         time_column_data = test.index
         data_colums = test.columns
@@ -136,7 +135,7 @@ class TransformerAdapter_single:
                 target_mark.to(device),
             )
             # decoder input
-            dec_input = torch.zeros_like(target[:, -config.pred_len:, :]).float()
+            dec_input = torch.zeros_like(target[:, -config.pred_len :, :]).float()
             dec_input = (
                 torch.cat([target[:, : config.label_len, :], dec_input], dim=1)
                 .float()
@@ -145,8 +144,8 @@ class TransformerAdapter_single:
 
             output = self.model(input, input_mark, dec_input, target_mark)
 
-            target = target[:, -config.pred_len:, :]
-            output = output[:, -config.pred_len:, :]
+            target = target[:, -config.pred_len :, :]
+            output = output[:, -config.pred_len :, :]
             loss = criterion(output, target).detach().cpu().numpy()
             total_loss.append(loss)
 
@@ -198,7 +197,7 @@ class TransformerAdapter_single:
         # criterion = nn.L1Loss()
         criterion = nn.SmoothL1Loss()
 
-        optimizer = optim.Adam(self.model.parameters(), lr=config.lr)
+        optimizer = optim.Adam(self.model.parameters(), lr=config.lr, foreach=False)
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -221,7 +220,7 @@ class TransformerAdapter_single:
             self.model.train()
             # for input, target, input_mark, target_mark in train_data_loader:
             for i, (input, target, input_mark, target_mark) in enumerate(
-                    train_data_loader
+                train_data_loader
             ):
                 optimizer.zero_grad()
                 input, target, input_mark, target_mark = (
@@ -231,7 +230,7 @@ class TransformerAdapter_single:
                     target_mark.to(device),
                 )
                 # decoder input
-                dec_input = torch.zeros_like(target[:, -config.pred_len:, :]).float()
+                dec_input = torch.zeros_like(target[:, -config.pred_len :, :]).float()
                 dec_input = (
                     torch.cat([target[:, : config.label_len, :], dec_input], dim=1)
                     .float()
@@ -240,8 +239,8 @@ class TransformerAdapter_single:
 
                 output = self.model(input, input_mark, dec_input, target_mark)
 
-                target = target[:, -config.pred_len:, :]
-                output = output[:, -config.pred_len:, :]
+                target = target[:, -config.pred_len :, :]
+                output = output[:, -config.pred_len :, :]
                 loss = criterion(output, target)
 
                 loss.backward()
@@ -293,7 +292,7 @@ class TransformerAdapter_single:
                         target_mark.to(device),
                     )
                     dec_input = torch.zeros_like(
-                        target[:, -config.pred_len:, :]
+                        target[:, -config.pred_len :, :]
                     ).float()
                     dec_input = (
                         torch.cat([target[:, : config.label_len, :], dec_input], dim=1)
@@ -303,7 +302,7 @@ class TransformerAdapter_single:
                     output = self.model(input, input_mark, dec_input, target_mark)
 
                 column_num = output.shape[-1]
-                temp = output.cpu().numpy().reshape(-1, column_num)[-config.pred_len:]
+                temp = output.cpu().numpy().reshape(-1, column_num)[-config.pred_len :]
 
                 if answer is None:
                     answer = temp
@@ -314,11 +313,11 @@ class TransformerAdapter_single:
                     # answer[-pred_len:] = self.scaler.inverse_transform(answer[-pred_len:])
                     return answer[-pred_len:]
 
-                output = output.cpu().numpy()[:, -config.pred_len:, :]
+                output = output.cpu().numpy()[:, -config.pred_len :, :]
                 for i in range(config.pred_len):
                     test.iloc[i + config.seq_len] = output[0, i, :]
 
-                test = test.iloc[config.pred_len:]
+                test = test.iloc[config.pred_len :]
                 test = self.padding_data_for_forecast(test)
 
                 test_data_set, test_data_loader = data_provider(
@@ -331,7 +330,7 @@ class TransformerAdapter_single:
                 )
 
     def inner_forecast_back(
-            self, horizon_len: int, pred_len: int, data: pd.DataFrame
+        self, horizon_len: int, pred_len: int, data: pd.DataFrame
     ) -> np.ndarray:
         if self.model is None:
             raise ValueError("Model not trained. Call the fit() function first.")
@@ -357,7 +356,7 @@ class TransformerAdapter_single:
                 input_mark.to(device),
                 target_mark.to(device),
             )
-            dec_input = torch.zeros_like(target[:, -config.pred_len:, :]).float()
+            dec_input = torch.zeros_like(target[:, -config.pred_len :, :]).float()
             dec_input = (
                 torch.cat([target[:, : config.label_len, :], dec_input], dim=1)
                 .float()
@@ -371,7 +370,7 @@ class TransformerAdapter_single:
 
 
 def generate_model_factory(
-        model_name: str, model_class: type, required_args: dict
+    model_name: str, model_class: type, required_args: dict
 ) -> Dict:
     """
     生成模型工厂信息，用于创建 TransformerAdapter 模型适配器。

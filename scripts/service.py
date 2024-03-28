@@ -141,7 +141,7 @@ async def forecast_service(
         "--gpus",
         type=int,
         nargs="+",
-        default=[0],
+        default=[1],
         help="list of gpu devices to use, only available in certain backends",
     )
     parser.add_argument(
